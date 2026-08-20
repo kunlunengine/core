@@ -1,0 +1,12 @@
+{
+  "files": [],
+  "references": [
+    { "path": "./packages/build-api" },
+    { "path": "./packages/core" },
+    { "path": "./packages/builder-nasti" },
+    { "path": "./packages/builder-vite" },
+    { "path": "./packages/builder-webpack" },
+    { "path": "./packages/builder-rspack" },
+    { "path": "./packages/cli" }
+  ]
+}

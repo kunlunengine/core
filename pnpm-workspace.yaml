@@ -1,0 +1,11 @@
+packages:
+  - packages/*
+
+minimumReleaseAgeExclude:
+  - vite@8.2.2
+
+onlyBuiltDependencies:
+  - '@napi-rs/wasm-runtime'
+  - '@parcel/watcher'
+  - esbuild
+  - unrs-resolver

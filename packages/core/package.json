@@ -1,0 +1,23 @@
+{
+  "name": "@kunlun-js/core",
+  "version": "0.1.0",
+  "description": "Explicit, capability-aware application core for Kunlun Engine",
+  "license": "MIT",
+  "author": "Zixiao Laboratories",
+  "homepage": "https://github.com/kunlunengine/core#readme",
+  "repository": { "type": "git", "url": "https://github.com/kunlunengine/core.git", "directory": "packages/core" },
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": ["dist"],
+  "engines": { "node": ">=20.19.0" },
+  "dependencies": {
+    "@kunlun-js/build-api": "workspace:^"
+  },
+  "publishConfig": { "access": "public" }
+}

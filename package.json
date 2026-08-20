@@ -1,0 +1,34 @@
+{
+  "name": "kunlunengine-core",
+  "version": "0.1.0",
+  "private": true,
+  "description": "A bundler-neutral TypeScript application platform from Zixiao Laboratories",
+  "license": "MIT",
+  "author": "Zixiao Laboratories",
+  "homepage": "https://github.com/kunlunengine/core#readme",
+  "repository": "github:kunlunengine/core",
+  "bugs": "https://github.com/kunlunengine/core/issues",
+  "type": "module",
+  "packageManager": "pnpm@11.22.0",
+  "engines": {
+    "node": ">=20.19.0"
+  },
+  "scripts": {
+    "build": "tsc -b",
+    "check": "tsc -b --pretty false",
+    "clean": "tsc -b --clean",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "devDependencies": {
+    "@nasti-toolchain/nasti": "2.4.4",
+    "@rspack/core": "2.1.10",
+    "@rspack/dev-middleware": "2.0.3",
+    "@types/node": "^24.10.0",
+    "typescript": "^5.9.3",
+    "vite": "^8.2.2",
+    "vitest": "^4.1.11",
+    "webpack": "^5.109.2",
+    "webpack-dev-middleware": "^8.1.1"
+  }
+}

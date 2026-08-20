@@ -1,0 +1,22 @@
+{
+  "name": "@kunlun-js/cli",
+  "version": "0.1.0",
+  "description": "Unified project and build CLI for Kunlun Engine",
+  "license": "MIT",
+  "author": "Zixiao Laboratories",
+  "homepage": "https://github.com/kunlunengine/core#readme",
+  "repository": { "type": "git", "url": "https://github.com/kunlunengine/core.git", "directory": "packages/cli" },
+  "type": "module",
+  "bin": { "kunlun": "./dist/cli.js" },
+  "exports": { ".": { "types": "./dist/index.d.ts", "import": "./dist/index.js" } },
+  "files": ["dist"],
+  "engines": { "node": ">=20.19.0" },
+  "dependencies": {
+    "@kunlun-js/builder-nasti": "workspace:^",
+    "@kunlun-js/builder-rspack": "workspace:^",
+    "@kunlun-js/builder-vite": "workspace:^",
+    "@kunlun-js/builder-webpack": "workspace:^",
+    "@kunlun-js/core": "workspace:^"
+  },
+  "publishConfig": { "access": "public" }
+}

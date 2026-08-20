@@ -1,0 +1,1 @@
+Kunlun Engine v0.1 is live: a bundler-neutral TypeScript application core with first-party Nasti, Vite, Webpack & Rspack adapters, plus an explicit capability model. MIT-licensed and built by Zixiao Laboratories. https://github.com/kunlunengine/core
