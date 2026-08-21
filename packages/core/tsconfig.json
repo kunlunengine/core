@@ -6,5 +6,8 @@
     "tsBuildInfoFile": "../../node_modules/.cache/tsbuildinfo/core.tsbuildinfo"
   },
   "include": ["src/**/*.ts"],
-  "references": [{ "path": "../build-api" }]
+  "references": [
+    { "path": "../build-api" },
+    { "path": "../runtime-api" }
+  ]
 }

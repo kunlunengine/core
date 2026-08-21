@@ -7,12 +7,14 @@ import { vite } from '@kunlun-js/builder-vite'
 import { webpack } from '@kunlun-js/builder-webpack'
 import {
   createApplicationManifest,
+  createRuntimeApplication,
   defineConfig,
   type KunlunConfig,
   type TargetDefinition,
 } from '@kunlun-js/core'
+import { nodeRuntime } from '@kunlun-js/runtime-node'
 
-const VERSION = '0.1.0'
+const VERSION = '0.2.0'
 const ENGINES = { nasti, vite, webpack, rspack } as const
 type EngineName = keyof typeof ENGINES
 
@@ -26,6 +28,9 @@ export async function runCli(args: string[], cwd = process.cwd()): Promise<void>
       break
     case 'dev':
       await devCommand(rest, cwd)
+      break
+    case 'start':
+      await startCommand(rest, cwd)
       break
     case 'doctor':
       await doctorCommand(rest, cwd)
@@ -70,6 +75,13 @@ async function buildCommand(args: string[], cwd: string): Promise<void> {
         + `(${result.artifacts.length} artifacts)`,
       )
     }
+    const manifestDir = path.join(root, '.kunlun')
+    await mkdir(manifestDir, { recursive: true })
+    await writeFile(
+      path.join(manifestDir, 'application-manifest.json'),
+      `${JSON.stringify(createApplicationManifest(config.application), null, 2)}\n`,
+    )
+    console.log('✓ application manifest written to .kunlun/application-manifest.json')
   } finally {
     await session.close()
   }
@@ -79,30 +91,65 @@ async function devCommand(args: string[], cwd: string): Promise<void> {
   const root = path.resolve(cwd, option(args, '--root') ?? '.')
   const config = await loadConfig(root, option(args, '--config'))
   const targets = selectedTargets(config, option(args, '--target'))
-  const basePort = Number(option(args, '--port') ?? 3000)
-  if (!Number.isInteger(basePort) || basePort < 0 || basePort > 65_535) {
-    throw new Error(`Invalid port: ${basePort}`)
-  }
+  const basePort = parsePort(option(args, '--port') ?? '3000')
+  const defaultRuntimePort = basePort === 0 ? 0 : basePort + targets.length
+  const runtimePort = parsePort(
+    option(args, '--runtime-port') ?? String(config.runtimeOptions?.port ?? defaultRuntimePort),
+  )
   const session = await config.builder.createSession({
     root,
     mode: 'development',
     application: createApplicationManifest(config.application),
   })
-  const devSessions = await Promise.all(
-    targets.map((target, index) => session.serve({ ...target, port: basePort + index })),
-  )
-  for (const dev of devSessions) {
-    console.log(`✓ ${dev.target} running with ${dev.engine}`)
-    for (const url of dev.urls) console.log(`  ${url}`)
-  }
+  const devSessions = []
+  let runtimeServer: Awaited<ReturnType<ReturnType<typeof nodeRuntime>['start']>> | undefined
+  try {
+    for (let index = 0; index < targets.length; index++) {
+      const target = targets[index]
+      if (target) {
+        const port = basePort === 0 ? 0 : parsePort(String(basePort + index))
+        devSessions.push(await session.serve({ ...target, port }))
+      }
+    }
+    for (const dev of devSessions) {
+      console.log(`✓ ${dev.target} running with ${dev.engine}`)
+      for (const url of dev.urls) console.log(`  ${url}`)
+    }
 
-  await new Promise<void>((resolve) => {
-    const stop = () => resolve()
-    process.once('SIGINT', stop)
-    process.once('SIGTERM', stop)
+    const runtime = config.runtime ?? nodeRuntime()
+    runtimeServer = await runtime.start(runtimeApplication(config), {
+      ...config.runtimeOptions,
+      mode: 'development',
+      port: runtimePort,
+      cors: config.runtimeOptions?.cors ?? true,
+    })
+    console.log(`✓ application running with ${runtime.displayName}`)
+    console.log(`  ${runtimeServer.url}`)
+    await waitForShutdown()
+  } finally {
+    await runtimeServer?.close()
+    await Promise.all(devSessions.map((dev) => dev.close()))
+    await session.close()
+  }
+}
+
+async function startCommand(args: string[], cwd: string): Promise<void> {
+  const root = path.resolve(cwd, option(args, '--root') ?? '.')
+  const config = await loadConfig(root, option(args, '--config'))
+  const port = parsePort(option(args, '--port') ?? String(config.runtimeOptions?.port ?? 3000))
+  const runtime = config.runtime ?? nodeRuntime()
+  const server = await runtime.start(runtimeApplication(config), {
+    ...config.runtimeOptions,
+    mode: 'production',
+    port,
   })
-  await Promise.all(devSessions.map((dev) => dev.close()))
-  await session.close()
+  console.log(`✓ application running with ${runtime.displayName}`)
+  console.log(`  ${server.url}`)
+  try {
+    await waitForShutdown()
+  } finally {
+    await server.close()
+  }
 }
 
 async function doctorCommand(args: string[], cwd: string): Promise<void> {
@@ -114,6 +161,7 @@ async function doctorCommand(args: string[], cwd: string): Promise<void> {
   const config = await loadConfig(root, option(args, '--config'))
   console.log(`✓ config loaded (${config.application.name})`)
   console.log(`✓ build engine: ${config.builder.displayName}`)
+  console.log(`✓ runtime: ${(config.runtime ?? nodeRuntime()).displayName}`)
   console.log(`✓ targets: ${selectedTargets(config).map((target) => target.name).join(', ')}`)
 }
 
@@ -146,22 +194,34 @@ async function createCommand(args: string[], cwd: string): Promise<void> {
       version: '0.0.0',
       private: true,
       type: 'module',
-      scripts: { dev: 'kunlun dev', build: 'kunlun build', doctor: 'kunlun doctor' },
+      packageManager: 'pnpm@11.22.0',
+      scripts: { dev: 'kunlun dev', build: 'kunlun build', start: 'kunlun start', doctor: 'kunlun doctor' },
       dependencies: {
-        '@kunlun-js/core': '^0.1.0',
+        '@kunlun-js/core': '^0.2.0',
         [`@kunlun-js/builder-${engineName}`]: '^0.1.0',
       },
       devDependencies: {
-        '@kunlun-js/cli': '^0.1.0',
+        '@kunlun-js/cli': '^0.2.0',
         [peer.name]: peer.version,
       },
     }, null, 2)}\n`),
     writeFile(path.join(root, 'kunlun.config.mjs'), configTemplate(engineName)),
-    writeFile(path.join(root, 'index.html'), '<!doctype html>\n<div id="app"></div>\n<script type="module" src="/src/main.js"></script>\n'),
-    writeFile(path.join(root, 'src/main.js'), "document.querySelector('#app').textContent = 'Hello from Kunlun Engine'\n"),
-    writeFile(path.join(root, '.gitignore'), 'node_modules/\ndist/\n'),
+    writeFile(path.join(root, 'index.html'), '<!doctype html>\n<meta charset="utf-8">\n<title>Kunlun Engine</title>\n<div id="app">Loading…</div>\n<script type="module" src="/src/main.js"></script>\n'),
+    writeFile(path.join(root, 'src/main.js'), `const app = document.querySelector('#app')
+try {
+  const response = await fetch('http://localhost:3001/api/hello')
+  const result = await response.json()
+  app.textContent = result.hello
+} catch (error) {
+  app.textContent = \`Runtime unavailable: \${error.message}\`
+}
+`),
+    writeFile(path.join(root, '.gitignore'), 'node_modules/\ndist/\n.kunlun/\n'),
   ])
   console.log(`✓ Created ${packageName} with ${engineName} at ${root}`)
+  console.log(`  cd ${destination}`)
+  console.log('  pnpm install')
+  console.log('  pnpm dev')
 }
 
 async function loadConfig(root: string, explicit?: string): Promise<KunlunConfig> {
@@ -192,6 +252,31 @@ function selectedTargets(config: KunlunConfig, selected?: string): TargetDefinit
   const result = selected ? targets.filter((target) => target.name === selected) : targets
   if (result.length === 0) throw new Error(selected ? `Unknown target: ${selected}` : 'No build targets configured')
   return result
+}
+
+function runtimeApplication(config: KunlunConfig) {
+  return createRuntimeApplication(
+    config.application,
+    config.capabilities === undefined ? {} : { capabilities: config.capabilities },
+  )
+}
+
+function parsePort(value: string): number {
+  const port = Number(value)
+  if (!Number.isInteger(port) || port < 0 || port > 65_535) throw new Error(`Invalid port: ${value}`)
+  return port
+}
+
+async function waitForShutdown(): Promise<void> {
+  await new Promise<void>((resolve) => {
+    const stop = () => {
+      process.off('SIGINT', stop)
+      process.off('SIGTERM', stop)
+      resolve()
+    }
+    process.once('SIGINT', stop)
+    process.once('SIGTERM', stop)
+  })
 }
 
 function option(args: string[], name: string): string | undefined {
@@ -260,8 +345,9 @@ Usage: kunlun <command> [options]
 
 Commands:
   new <directory>      Create a project (Nasti by default)
-  dev                  Start configured development targets
+  dev                  Start build targets and the application runtime
   build                Build configured targets
+  start                Start only the application runtime
   doctor               Validate the project and environment
   engines              Show available engines and capabilities
 
@@ -270,5 +356,6 @@ Options:
   --config <file>      Config path relative to the project root
   --root <directory>   Project root
   --target <name>      Run one configured target
-  --port <number>      Base development port`)
+  --port <number>      Base build target port, or runtime port for start
+  --runtime-port <n>   Runtime port for dev (default: after target ports)`)
 }

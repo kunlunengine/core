@@ -1,6 +1,6 @@
 {
   "name": "@kunlun-js/cli",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Unified project and build CLI for Kunlun Engine",
   "license": "MIT",
   "author": "Zixiao Laboratories",
@@ -16,7 +16,8 @@
     "@kunlun-js/builder-rspack": "workspace:^",
     "@kunlun-js/builder-vite": "workspace:^",
     "@kunlun-js/builder-webpack": "workspace:^",
-    "@kunlun-js/core": "workspace:^"
+    "@kunlun-js/core": "workspace:^",
+    "@kunlun-js/runtime-node": "workspace:^"
   },
   "publishConfig": { "access": "public" }
 }

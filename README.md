@@ -12,8 +12,8 @@ Kunlun Engine separates application semantics from JavaScript build tools. Appli
 services, routes, capability requirements, and build targets once, then choose Nasti, Vite,
 Webpack, or Rspack through first-party adapters.
 
-This repository is an early v0.1 source preview. The public packages use the registered
-`@kunlun-js` scope; npm publication will follow the source preview.
+The first packages are published under the registered `@kunlun-js` scope. This branch is the next
+vertical slice: a runtime-neutral protocol, a Node.js reference runtime, and CLI runtime orchestration.
 
 ## Why
 
@@ -26,15 +26,17 @@ The application core is similarly explicit: no decorators, reflection metadata, 
 container. Required resources are declared as capabilities and compiled into a runtime-readable
 manifest.
 
-## What works in v0.1
+## What works
 
 - Explicit applications, services, routes, path parameters, and capability requirements.
 - Portable Fetch API request handlers and serializable application manifests.
+- A runtime adapter protocol and explicit capability registry.
+- A Node.js reference runtime that serves Fetch applications over HTTP.
 - A capability-negotiated `BuildEngine` protocol.
 - Production builds with Nasti, Vite, Webpack, and Rspack.
 - Development sessions and middleware for all four engines.
 - Native module transforms, HMR, and SSR loading where the selected engine exposes them.
-- `kunlun new`, `dev`, `build`, `doctor`, and `engines` commands.
+- `kunlun new`, `dev`, `build`, `start`, `doctor`, and `engines` commands.
 - Contract tests that execute real builds with all four engines.
 
 ## Engine support
@@ -127,6 +129,8 @@ available inside that constructor.
 
 - `@kunlun-js/core` — application, service, route, capability, and config APIs.
 - `@kunlun-js/build-api` — the stable build engine and dev session protocol.
+- `@kunlun-js/runtime-api` — runtime-neutral server, lifecycle, and capability contracts.
+- `@kunlun-js/runtime-node` — the Node.js reference runtime.
 - `@kunlun-js/builder-nasti` — recommended Nasti adapter.
 - `@kunlun-js/builder-vite` — Vite adapter.
 - `@kunlun-js/builder-webpack` — Webpack adapter.
@@ -135,10 +139,15 @@ available inside that constructor.
 
 ## Direction
 
-The next layer is Kunlun Runtime: a Rust host embedding JavaScriptCore, designed for fast startup
-and capability grants scoped more narrowly than process-wide permission flags. Untrusted
-extensions will also require operating-system isolation; a JavaScript realm alone is not treated
-as a security boundary.
+The Node.js adapter makes the runtime boundary executable before the native runtime is ready. The
+next runtime implementation is a Rust host embedding JavaScriptCore, designed for fast startup and
+capability grants scoped more narrowly than process-wide permission flags. Untrusted extensions
+will also require operating-system isolation; a JavaScript realm alone is not treated as a
+security boundary.
+
+pnpm remains responsible for dependency resolution, installation, workspace linking, and script
+execution. `kunlun` is intentionally a thin project shim and orchestrator; it does not embed or
+replace a package manager.
 
 Remote workspaces will consume the existing Development Container Specification and add a
 provider-neutral control plane for prebuilds, caches, secrets, port routing, and workspace

@@ -6,8 +6,9 @@ Kunlun Engine keeps four concerns separate:
 Application definitions
         │
         ▼
-@kunlun-js/core ───────► application manifest ───────► Kunlun Runtime (planned)
-        │
+@kunlun-js/core ───────► application manifest ───────► runtime-api
+        │                                      ├────► runtime-node (reference)
+        │                                      └────► Rust + JavaScriptCore (planned)
         ▼
 @kunlun-js/build-api
    ├── builder-nasti
@@ -54,14 +55,26 @@ executable.
 
 ## Runtime direction
 
-The planned runtime separates the JavaScript engine from authority. Rust host operations will
+`@kunlun-js/runtime-api` defines a small Fetch-based application and server lifecycle contract.
+`@kunlun-js/runtime-node` is the v0.1 reference implementation. It exists to make routing,
+capability injection, CLI orchestration, errors, CORS, and graceful shutdown testable before the
+native host is ready; it is not the final sandbox.
+
+The native runtime separates the JavaScript engine from authority. Rust host operations will
 require opaque capability handles scoped to an extension, tenant, request, operation, and resource.
 Native add-ons, FFI, and subprocesses are denied to untrusted extensions. Process, container, or
 microVM isolation remains necessary for hostile code.
 
-The first runtime prototype must validate JavaScriptCore distribution, ESM loading, Promise/async
-bridging, GC rooting, execution termination, source maps, and debugging before compatibility claims
-are made.
+The first native runtime prototype must validate JavaScriptCore distribution, ESM loading,
+Promise/async bridging, GC rooting, execution termination, source maps, and debugging before
+compatibility claims are made.
+
+## CLI and package-manager boundary
+
+pnpm owns dependency resolution, installation, lockfiles, workspace linking, and lifecycle script
+execution. The `kunlun` CLI generates package metadata and prints the pnpm commands a developer
+should run, but never installs packages itself. During development it orchestrates one selected
+build adapter plus one runtime adapter; in CI it builds manifests and targets.
 
 ## Remote development direction
 
