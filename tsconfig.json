@@ -2,6 +2,8 @@
   "files": [],
   "references": [
     { "path": "./packages/build-api" },
+    { "path": "./packages/runtime-api" },
+    { "path": "./packages/runtime-node" },
     { "path": "./packages/core" },
     { "path": "./packages/builder-nasti" },
     { "path": "./packages/builder-vite" },

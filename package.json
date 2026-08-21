@@ -17,6 +17,8 @@
     "build": "tsc -b",
     "check": "tsc -b --pretty false",
     "clean": "tsc -b --clean",
+    "release:publish": "node scripts/publish-release.mjs",
+    "release:dry-run": "node scripts/publish-release.mjs --dry-run",
     "test": "vitest run",
     "test:watch": "vitest"
   },

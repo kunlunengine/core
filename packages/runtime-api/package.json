@@ -1,11 +1,11 @@
 {
-  "name": "@kunlun-js/core",
-  "version": "0.2.0",
-  "description": "Explicit, capability-aware application core for Kunlun Engine",
+  "name": "@kunlun-js/runtime-api",
+  "version": "0.1.0",
+  "description": "Runtime-neutral server and capability protocol for Kunlun Engine",
   "license": "MIT",
   "author": "Zixiao Laboratories",
   "homepage": "https://github.com/kunlunengine/core#readme",
-  "repository": { "type": "git", "url": "https://github.com/kunlunengine/core.git", "directory": "packages/core" },
+  "repository": { "type": "git", "url": "https://github.com/kunlunengine/core.git", "directory": "packages/runtime-api" },
   "type": "module",
   "sideEffects": false,
   "exports": {
@@ -17,8 +17,7 @@
   "files": ["dist"],
   "engines": { "node": ">=20.19.0" },
   "dependencies": {
-    "@kunlun-js/build-api": "workspace:^",
-    "@kunlun-js/runtime-api": "workspace:^"
+    "@kunlun-js/build-api": "workspace:^"
   },
   "publishConfig": { "access": "public" }
 }

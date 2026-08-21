@@ -97,12 +97,30 @@ importers:
       '@kunlun-js/core':
         specifier: workspace:^
         version: link:../core
+      '@kunlun-js/runtime-node':
+        specifier: workspace:^
+        version: link:../runtime-node
 
   packages/core:
     dependencies:
       '@kunlun-js/build-api':
         specifier: workspace:^
         version: link:../build-api
+      '@kunlun-js/runtime-api':
+        specifier: workspace:^
+        version: link:../runtime-api
+
+  packages/runtime-api:
+    dependencies:
+      '@kunlun-js/build-api':
+        specifier: workspace:^
+        version: link:../build-api
+
+  packages/runtime-node:
+    dependencies:
+      '@kunlun-js/runtime-api':
+        specifier: workspace:^
+        version: link:../runtime-api
 
 packages:
 

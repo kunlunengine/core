@@ -4,8 +4,27 @@ import type {
   BuildEngine,
   BuildRequest,
 } from '@kunlun-js/build-api'
+import {
+  toCapabilityRecord,
+  type CapabilityProvider,
+  type RuntimeAdapter,
+  type RuntimeApplication,
+  type RuntimeStartOptions,
+} from '@kunlun-js/runtime-api'
 
 export type { ApplicationManifest, BuildEngine, BuildCapabilities } from '@kunlun-js/build-api'
+export {
+  CapabilityRegistry,
+  MissingRuntimeCapabilityError,
+  type CapabilityProvider,
+  type CorsSetting,
+  type RuntimeAdapter,
+  type RuntimeAddress,
+  type RuntimeApplication,
+  type RuntimeMode,
+  type RuntimeServer,
+  type RuntimeStartOptions,
+} from '@kunlun-js/runtime-api'
 
 export interface CapabilityRequirement {
   name: string
@@ -49,10 +68,13 @@ export interface KunlunConfig {
   application: ApplicationDefinition
   builder: BuildEngine
   targets?: readonly TargetDefinition[]
+  runtime?: RuntimeAdapter
+  runtimeOptions?: RuntimeStartOptions
+  capabilities?: Readonly<Record<string, unknown>> | CapabilityProvider
 }
 
 export interface RequestHandlerOptions {
-  capabilities?: Readonly<Record<string, unknown>>
+  capabilities?: Readonly<Record<string, unknown>> | CapabilityProvider
 }
 
 export class MissingCapabilityError extends Error {
@@ -155,7 +177,14 @@ export function defineConfig(config: KunlunConfig): KunlunConfig {
     if (!target.outDir) throw new TypeError(`Build target "${target.name}" requires outDir`)
   }
 
-  return Object.freeze({ application, builder: config.builder, targets })
+  return Object.freeze({
+    application,
+    builder: config.builder,
+    targets,
+    ...(config.runtime === undefined ? {} : { runtime: config.runtime }),
+    ...(config.runtimeOptions === undefined ? {} : { runtimeOptions: Object.freeze({ ...config.runtimeOptions }) }),
+    ...(config.capabilities === undefined ? {} : { capabilities: config.capabilities }),
+  })
 }
 
 export function createApplicationManifest(application: ApplicationDefinition): ApplicationManifest {
@@ -181,7 +210,7 @@ export function createRequestHandler(
   application: ApplicationDefinition,
   options: RequestHandlerOptions = {},
 ): (request: Request) => Promise<Response> {
-  const capabilities = options.capabilities ?? {}
+  const capabilities = toCapabilityRecord(options.capabilities)
   const compiled = application.services.flatMap((service) => {
     for (const requirement of service.capabilities ?? []) {
       if (!requirement.optional && !(requirement.name in capabilities)) {
@@ -220,6 +249,17 @@ export function createRequestHandler(
       status: pathMatched ? 405 : 404,
     })
   }
+}
+
+export function createRuntimeApplication(
+  application: ApplicationDefinition,
+  options: RequestHandlerOptions = {},
+): RuntimeApplication {
+  const fetch = createRequestHandler(application, options)
+  return Object.freeze({
+    manifest: createApplicationManifest(application),
+    fetch,
+  })
 }
 
 function defaultTargets(): TargetDefinition[] {

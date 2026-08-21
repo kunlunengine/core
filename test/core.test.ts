@@ -3,6 +3,7 @@ import {
   capability,
   createApplicationManifest,
   createRequestHandler,
+  createRuntimeApplication,
   defineApplication,
   defineService,
   MissingCapabilityError,
@@ -66,5 +67,14 @@ describe('application core', () => {
         ],
       }],
     })
+  })
+
+  it('creates a runtime-neutral Fetch application', async () => {
+    const application = createRuntimeApplication(fixtureApplication(), {
+      capabilities: { 'database.orders': {} },
+    })
+    const response = await application.fetch(new Request('http://runtime/api/orders/9'))
+    expect(application.manifest.name).toBe('orders-app')
+    await expect(response.json()).resolves.toEqual({ id: '9' })
   })
 })
