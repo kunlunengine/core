@@ -12,8 +12,9 @@ Kunlun Engine separates application semantics from JavaScript build tools. Appli
 services, routes, capability requirements, and build targets once, then choose Nasti, Vite,
 Webpack, or Rspack through first-party adapters.
 
-The first packages are published under the registered `@kunlun-js` scope. This branch is the next
-vertical slice: a runtime-neutral protocol, a Node.js reference runtime, and CLI runtime orchestration.
+The first packages are published under the registered `@kunlun-js` scope. The v0.2 development
+line adds a first-party, convention-driven full-stack layer while retaining the runtime-neutral
+protocol, Node.js reference runtime, and CLI orchestration established by v0.1.
 
 ## Why
 
@@ -139,11 +140,17 @@ available inside that constructor.
 
 ## Direction
 
-The Node.js adapter makes the runtime boundary executable before the native runtime is ready. The
-next runtime implementation is a Rust host embedding JavaScriptCore, designed for fast startup and
-capability grants scoped more narrowly than process-wide permission flags. Untrusted extensions
-will also require operating-system isolation; a JavaScript realm alone is not treated as a
-security boundary.
+The v0.2 application track starts with [Kunlun Next.js](./packages/next/README.md), a first-party
+full-stack convention layer that compiles filesystem routes, server/client boundaries, and
+capability requirements into the existing public core contracts. "Next.js-style" describes the
+developer experience; it is not a compatibility promise.
+
+The native Rust host embedding JavaScriptCore now advances independently in the
+[`kunlunengine/runtime`](https://github.com/kunlunengine/runtime) repository. It has entered the M1
+reproducible-distribution and safe-binding milestone. The Node.js adapter keeps the runtime
+boundary executable while that work continues. Native capability grants are designed to be scoped
+more narrowly than process-wide permission flags, and untrusted extensions will still require
+operating-system isolation; a JavaScript realm alone is not treated as a security boundary.
 
 pnpm remains responsible for dependency resolution, installation, workspace linking, and script
 execution. `kunlun` is intentionally a thin project shim and orchestrator; it does not embed or

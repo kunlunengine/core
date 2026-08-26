@@ -3,12 +3,12 @@
 Kunlun Engine keeps four concerns separate:
 
 ```text
-Application definitions
+Application definitions ◄──── Kunlun Next.js conventions (v0.2 design)
         │
         ▼
 @kunlun-js/core ───────► application manifest ───────► runtime-api
         │                                      ├────► runtime-node (reference)
-        │                                      └────► Rust + JavaScriptCore (planned)
+        │                                      └────► Rust + JavaScriptCore (M1 in runtime repo)
         ▼
 @kunlun-js/build-api
    ├── builder-nasti
@@ -24,6 +24,10 @@ Application definitions
 
 `@kunlun-js/core` owns application semantics: service identity, routes, declared capabilities,
 request handling, targets, and runtime manifests. It does not import a bundler.
+
+Kunlun Next.js is a convention and compilation layer above this boundary. Filesystem routes,
+layouts, and server/client entries must lower into inspectable core and build contracts rather
+than create a parallel application model.
 
 The first request handler targets standard Fetch API `Request` and `Response` objects so that the
 same service definitions can be exercised on Node.js today and on Kunlun Runtime later.
