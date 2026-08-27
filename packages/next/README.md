@@ -95,5 +95,8 @@ the same runtime contract when its application-compatibility milestone is ready.
 - Replacing pnpm, a build engine, or a runtime adapter.
 - Treating a JavaScript realm or a capability declaration as a complete hostile-code sandbox.
 
-The implementation will live under the `@kunlun-js` npm scope. Package name, renderer support,
-and the first stable public API will be recorded here as those decisions are made.
+The implementation will live under the `@kunlun-js` npm scope. The first reference renderer will
+target React, while its public API remains provisional until the executable contracts above pass.
+See the repository [v0.2-v0.4 roadmap](../../ROADMAP.md) for the release gate and later work.
+If you would like to help shape and own this work, see
+[maintainers wanted](../../docs/community/maintainers-wanted.md).
