@@ -5,7 +5,7 @@
 
 **An explicit, capability-aware, bundler-neutral TypeScript application platform.**
 
-[Architecture](./docs/architecture.md) · [Show HN draft](./docs/launch/show-hn.md) · [X launch post](./docs/launch/x-post.txt)
+[Architecture](./docs/architecture.md) · [Roadmap](./ROADMAP.md) · [Maintainers wanted](./docs/community/maintainers-wanted.md)
 </div>
 
 Kunlun Engine separates application semantics from JavaScript build tools. Applications define
@@ -137,6 +137,16 @@ available inside that constructor.
 - `@kunlun-js/builder-webpack` — Webpack adapter.
 - `@kunlun-js/builder-rspack` — Rspack adapter.
 - `@kunlun-js/cli` — the `kunlun` command.
+
+## Roadmap
+
+The repository-wide [v0.2-v0.4 roadmap](./ROADMAP.md) defines capability-based exit gates rather
+than calendar promises. In short: v0.2 makes the full-stack application path runnable, v0.3 makes
+the daily development workflow coherent, and v0.4 makes server artifacts portable across runtime
+adapters.
+
+We are also [looking for maintainers](./docs/community/maintainers-wanted.md) to own focused parts
+of the application, build-engine, runtime-contract, CLI, quality, and community workstreams.
 
 ## Direction
 
