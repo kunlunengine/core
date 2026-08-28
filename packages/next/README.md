@@ -4,8 +4,8 @@ Kunlun Next.js is the first-party, Next.js-style full-stack framework for Kunlun
 a convention-driven application model to Kunlun while keeping the platform's capabilities, build
 engines, and runtimes explicit.
 
-> Status: v0.2 design preview. This directory does not contain a published package yet, and every
-> API and file convention described here is provisional.
+> Status: v0.2 in progress. The first executable contract covers route discovery and route-handler
+> validation. Rendering, build-target compilation, and CLI orchestration remain provisional.
 
 "Next.js-style" describes the developer experience we are pursuing: filesystem routing, nested
 layouts, server-first rendering, route handlers, and explicit server/client boundaries. It does
@@ -67,9 +67,31 @@ app/
 kunlun.config.mjs
 ```
 
-The exact filenames and exports will be fixed only after the route compiler and server/client
-module graph have executable contract tests. We will prefer a small set of composable conventions
-over copying the full surface of another framework.
+The first executable contract fixes the `layout`, `page`, and `route` filenames and method-named
+route-handler exports. Later conventions will be added only with compiler and server/client module
+graph tests. We will prefer a small set of composable conventions over copying the full surface of
+another framework.
+
+## Route discovery contract
+
+The first v0.2 implementation discovers `layout`, `page`, and `route` modules with JavaScript or
+TypeScript source extensions. `discoverAppRoutes()` emits stable source paths relative to the
+configured `app/` directory, core-compatible paths such as `/orders/:id`, ordered layout ancestry,
+and structured diagnostics.
+
+```ts
+import { discoverAppRoutes } from '@kunlun-js/next'
+import { fileURLToPath } from 'node:url'
+
+const manifest = await discoverAppRoutes({
+  appDir: fileURLToPath(new URL('./app', import.meta.url)),
+})
+```
+
+Dynamic segments use `[name]`. Catch-all and optional forms are deliberately not part of the v0.2
+contract. A `route.ts` module exports one or more Fetch handlers named `GET`, `HEAD`, `POST`, `PUT`,
+`PATCH`, `DELETE`, or `OPTIONS`; `validateRouteHandlerModule()` validates that loaded-module
+boundary without coupling discovery to a TypeScript loader or build engine.
 
 ## v0.2 first slice
 

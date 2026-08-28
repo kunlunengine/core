@@ -38,6 +38,8 @@ manifest.
 - Development sessions and middleware for all four engines.
 - Native module transforms, HMR, and SSR loading where the selected engine exposes them.
 - `kunlun new`, `dev`, `build`, `start`, `doctor`, and `engines` commands.
+- Deterministic `app/` page, nested-layout, dynamic-segment, and Fetch route-handler discovery in
+  the first `@kunlun-js/next` v0.2 contract.
 - Contract tests that execute real builds with all four engines.
 
 ## Engine support
@@ -136,6 +138,8 @@ available inside that constructor.
 - `@kunlun-js/builder-vite` — Vite adapter.
 - `@kunlun-js/builder-webpack` — Webpack adapter.
 - `@kunlun-js/builder-rspack` — Rspack adapter.
+- `@kunlun-js/next` — convention-driven `app/` route compiler and full-stack layer (v0.2 in
+  progress).
 - `@kunlun-js/cli` — the `kunlun` command.
 
 ## Roadmap
