@@ -4,6 +4,9 @@
 
 - Started the Kunlun Next.js design track for filesystem routing, server-first applications, and
   explicit server/client and capability boundaries.
+- Added the first executable `@kunlun-js/next` contract: deterministic `app/` route discovery,
+  nested layout inheritance, dynamic-segment validation, conflict diagnostics, and Fetch route
+  handler module validation.
 - Added `@kunlun-js/runtime-api` and the Node.js reference runtime at v0.1.0.
 - Connected runtime startup and graceful shutdown to `kunlun dev` and `kunlun start`.
 - Kept pnpm as the dependency manager while narrowing the CLI to a project shim and orchestrator.

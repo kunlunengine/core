@@ -1,15 +1,25 @@
 {
   "name": "@kunlun-js/next",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "first-party, Next.js-style full-stack framework for Kunlun Engine",
   "license": "MIT",
   "author": "Zixiao Laboratories",
   "homepage": "https://github.com/kunlunengine/core#readme",
   "repository": { "type": "git", "url": "https://github.com/kunlunengine/core.git", "directory": "packages/next" },
   "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": ["dist"],
+  "engines": { "node": ">=20.19.0" },
   "peerDependencies": {
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "@kunlun-js/build-api": "workspace:^"
-  }
+  },
+  "publishConfig": { "access": "public" }
 }

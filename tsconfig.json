@@ -9,6 +9,7 @@
     { "path": "./packages/builder-vite" },
     { "path": "./packages/builder-webpack" },
     { "path": "./packages/builder-rspack" },
+    { "path": "./packages/next" },
     { "path": "./packages/cli" }
   ]
 }
