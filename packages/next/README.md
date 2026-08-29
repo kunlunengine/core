@@ -95,16 +95,10 @@ boundary without coupling discovery to a TypeScript loader or build engine.
 
 ## v0.2 first slice
 
-The first implementation slice should deliver:
-
-1. discovery and validation of pages, nested layouts, dynamic segments, and Fetch route handlers;
-2. compilation into `@kunlun-js/core` services, routes, manifests, and client/server build targets;
-3. a server/client module boundary that prevents server-only capability code from entering client
-   output;
-4. development and production orchestration through the existing `kunlun` CLI;
-5. Node.js runtime conformance tests and capability-aware diagnostics; and
-6. at least one complete example that can be created, developed, built, and started from packed
-   workspace artifacts.
+The first implementation slice delivers discovery of pages, nested layouts, dynamic segments, and
+Fetch route handlers, plus validation of loaded route-handler exports. Rendering, compilation into
+`@kunlun-js/core` services and client/server build targets, server/client module boundaries, CLI
+orchestration, runtime conformance, and complete runnable examples remain later, provisional work.
 
 The native Rust + JavaScriptCore runtime is not a prerequisite for this slice. It advances in the
 separate [`kunlunengine/runtime`](https://github.com/kunlunengine/runtime) repository and will join

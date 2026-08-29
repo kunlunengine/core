@@ -215,8 +215,8 @@ export function validateRouteHandlerModule(
   const record = module as Record<string, unknown>
   const handlers: Partial<Record<RouteHandlerMethod, FetchRouteHandler>> = {}
   for (const method of ROUTE_HANDLER_METHODS) {
+    if (!Object.prototype.hasOwnProperty.call(record, method)) continue
     const candidate = record[method]
-    if (candidate === undefined) continue
     if (typeof candidate !== 'function') {
       throw new RouteHandlerModuleError(
         'INVALID_ROUTE_HANDLER_EXPORT',

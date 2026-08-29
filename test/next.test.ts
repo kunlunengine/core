@@ -213,6 +213,16 @@ describe('route handler module contract', () => {
     )
   })
 
+  it('rejects explicitly undefined HTTP exports as invalid', () => {
+    expect(() => validateRouteHandlerModule({ GET: undefined }, 'api/route.ts')).toThrowError(
+      expect.objectContaining<Partial<RouteHandlerModuleError>>({
+        code: 'INVALID_ROUTE_HANDLER_EXPORT',
+        source: 'api/route.ts',
+        exportName: 'GET',
+      }),
+    )
+  })
+
   it('requires at least one supported HTTP method', () => {
     expect(() => validateRouteHandlerModule({ default: () => undefined }, 'api/route.ts')).toThrowError(
       expect.objectContaining<Partial<RouteHandlerModuleError>>({

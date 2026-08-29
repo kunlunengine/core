@@ -138,7 +138,7 @@ available inside that constructor.
 - `@kunlun-js/builder-vite` — Vite adapter.
 - `@kunlun-js/builder-webpack` — Webpack adapter.
 - `@kunlun-js/builder-rspack` — Rspack adapter.
-- `@kunlun-js/next` — convention-driven `app/` route compiler and full-stack layer (v0.2 in
+- `@kunlun-js/next` — convention-driven `app/` route discovery and manifest contract (v0.2 in
   progress).
 - `@kunlun-js/cli` — the `kunlun` command.
 
