@@ -5,7 +5,7 @@
 
 **An explicit, capability-aware, bundler-neutral TypeScript application platform.**
 
-[Architecture](./docs/architecture.md) · [Roadmap](./ROADMAP.md) · [Maintainers wanted](./docs/community/maintainers-wanted.md)
+[Documentation](./docs/index.md) · [Architecture](./docs/architecture.md) · [Roadmap](./ROADMAP.md) · [Maintainers wanted](./docs/community/maintainers-wanted.md)
 </div>
 
 Kunlun Engine separates application semantics from JavaScript build tools. Applications define

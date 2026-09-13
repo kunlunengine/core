@@ -11,6 +11,8 @@
 - Connected runtime startup and graceful shutdown to `kunlun dev` and `kunlun start`.
 - Kept pnpm as the dependency manager while narrowing the CLI to a project shim and orchestrator.
 - Added npm Trusted Publishing automation with GitHub Actions OIDC.
+- Split the v0.3 workflow milestone into ordered capability slices and started Context7 submission
+  preparation with a curated documentation index, parser policy, and expanded public references.
 
 ## 0.1.0 - 2026-08-20
 

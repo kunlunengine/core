@@ -1,6 +1,6 @@
 # Kunlun Engine Core Roadmap
 
-Status date: 2026-08-27
+Status date: 2026-09-13
 
 This roadmap covers the `kunlunengine/core` repository. Version numbers describe repository-wide
 development lines and capability gates, not calendar promises; individual `@kunlun-js` packages
@@ -57,6 +57,11 @@ declared contract or reports a precise unsupported capability.
 
 **Goal:** make the full-stack path productive enough for sustained application development and
 third-party contribution.
+
+The work is divided into capability slices rather than package-version increments. The detailed
+[v0.3 delivery plan](./docs/plans/v0.3-slices.md) defines their order, dependencies, acceptance
+criteria, and explicit deferrals. Planning can proceed during v0.2, but implementation may only
+rely on full-stack behavior that has passed the v0.2 exit gate.
 
 ### Planned outcomes
 
