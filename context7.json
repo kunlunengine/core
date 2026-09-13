@@ -1,5 +1,7 @@
 {
   "$schema": "https://context7.com/schema/context7.json",
+  "url": "https://context7.com/kunlunengine/core",
+  "public_key": "pk_AqlsMtJn5G0ur5mfxzqJ6",
   "projectTitle": "Kunlun Engine Core",
   "description": "Explicit, capability-aware, bundler-neutral TypeScript application, build, and runtime contracts.",
   "folders": [],
