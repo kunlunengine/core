@@ -1,0 +1,31 @@
+{
+  "$schema": "https://context7.com/schema/context7.json",
+  "projectTitle": "Kunlun Engine Core",
+  "description": "Explicit, capability-aware, bundler-neutral TypeScript application, build, and runtime contracts.",
+  "folders": [],
+  "excludeFolders": [
+    ".git",
+    ".github",
+    "docs/community",
+    "docs/launch",
+    "docs/plans",
+    "node_modules",
+    "scripts",
+    "test",
+    "**/dist",
+    "**/src"
+  ],
+  "excludeFiles": [
+    "CHANGELOG.md",
+    "ROADMAP.md",
+    "context7-submission.md",
+    "pnpm-lock.yaml"
+  ],
+  "rules": [
+    "Treat the nearest package status note and the documentation index as authoritative about whether an API is executable, a source preview, or planned.",
+    "Use public imports from @kunlun-js package roots; never recommend importing from src or dist paths.",
+    "Do not present roadmap items as implemented behavior.",
+    "Kunlun Next.js is Next.js-style but does not claim Next.js application, plugin, rendering, or deployment compatibility.",
+    "Report build-engine capabilities and documented fallbacks instead of assuming parity across Nasti, Vite, Webpack, and Rspack."
+  ]
+}
