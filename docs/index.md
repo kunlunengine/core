@@ -17,7 +17,7 @@ that a roadmap item or an unreleased package is available from npm.
 | --- | --- | --- |
 | Explicit services, routes, capabilities, and config | [`@kunlun-js/core`](../packages/core/README.md) | executable |
 | Build and development adapter contracts | [`@kunlun-js/build-api`](../packages/build-api/README.md) | executable |
-| Nasti, Vite, Webpack, or Rspack integration | the matching [`builder-*`](../packages/builder-nasti/README.md) package | executable, capability-dependent |
+| Nasti, Vite, Webpack, or Rspack integration | [`builder-nasti`](../packages/builder-nasti/README.md), [`builder-vite`](../packages/builder-vite/README.md), [`builder-webpack`](../packages/builder-webpack/README.md), or [`builder-rspack`](../packages/builder-rspack/README.md) | executable, capability-dependent |
 | Runtime-neutral applications and capability registry | [`@kunlun-js/runtime-api`](../packages/runtime-api/README.md) | source preview |
 | Node.js Fetch runtime | [`@kunlun-js/runtime-node`](../packages/runtime-node/README.md) | source preview |
 | Filesystem route and layout discovery | [`@kunlun-js/next`](../packages/next/README.md) | v0.2 source preview |
