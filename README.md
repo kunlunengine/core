@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="./kunlun-logo.png" alt="Kunlun Engine" width="180">
+  <img src="./kunlun-logo.svg" alt="Kunlun Engine" width="180">
 
 # Kunlun Engine
 
