@@ -54,6 +54,15 @@ A `RuntimeApplication` contains a serializable application manifest and
 server with its adapter name, bound address, public URL, in-process Fetch function, and idempotent
 `close()` lifecycle.
 
+An application may provide `close(): Promise<void>` to stop admission and release its owned
+request resources when the adapter shuts down. This is separate from transport cleanup.
+
+Portable M3 artifact types (`RuntimeArtifactManifest`, `RuntimeCapabilityRequirements`,
+`RuntimeRequestEnvironment`, and `RuntimeFetchEntry`) are exported separately. They do not
+replace the legacy Core application manifest or turn a `CapabilityRegistry` into host grants.
+The real Node admission/provider implementation and its limitations are documented in
+[Node authority integration](../../docs/runtime-node-authority.md).
+
 `cors` accepts `true` for `*`, one origin string, or an array of origins. An `AbortSignal` can ask
 the adapter to shut down. Exact transport behavior remains the adapter's responsibility.
 

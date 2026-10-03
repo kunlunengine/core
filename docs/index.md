@@ -35,6 +35,7 @@ description of its direction, not an API, plugin, rendering, or deployment compa
 - [CLI command reference](../packages/cli/README.md)
 - [Runtime API](../packages/runtime-api/README.md) and
   [Node.js adapter](../packages/runtime-node/README.md)
+- [Node request authority, portable artifact consumption, and evidence boundaries](./runtime-node-authority.md)
 - [Build API](../packages/build-api/README.md) and the engine capability matrix in the
   [repository overview](../README.md#engine-support)
 

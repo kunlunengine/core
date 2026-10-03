@@ -9,6 +9,16 @@ import type {
   RuntimeStartOptions,
 } from '@kunlun-js/runtime-api'
 
+export {
+  createRequestAuthority,
+  type NodeDeploymentGrants,
+  type NodeRequestAuthority,
+} from './authority.js'
+export {
+  createNodeApplication,
+  loadNodeApplication,
+} from './application.js'
+
 const DEFAULT_OPTIONS = Object.freeze({
   host: '127.0.0.1',
   port: 3000,
@@ -38,21 +48,53 @@ async function startNodeRuntime(
     throw new TypeError(`Invalid shutdown grace period: ${gracePeriod}`)
   }
 
+  let closePromise: Promise<void> | undefined
+  const dispatch = (request: Request): Promise<Response> => {
+    if (closePromise) return Promise.reject(new Error('Node runtime is closed'))
+    return Promise.resolve().then(async () => {
+      const response = await application.fetch(request)
+      if (!(response instanceof Response)) throw new TypeError('Runtime handler must return a Response')
+      return response
+    })
+  }
+  const reportError = async (error: unknown, request?: Request) => {
+    try {
+      await options.onError?.(error, request)
+    } catch {
+      // Diagnostics must not change HTTP behavior or escape an event listener.
+    }
+  }
   const server = createServer(async (incoming, outgoing) => {
+    const controller = new AbortController()
+    const abort = () => controller.abort()
+    const onClose = () => {
+      if (!outgoing.writableFinished) abort()
+    }
+    incoming.once('aborted', abort)
+    outgoing.once('close', onClose)
     let request: Request | undefined
     try {
-      request = toRequest(incoming)
+      request = toRequest(incoming, controller.signal)
+      if (closePromise) throw new Error('Node runtime is closed')
       const response = request.method === 'OPTIONS' && options.cors
         ? new Response(null, { status: 204 })
-        : await application.fetch(request)
-      await sendResponse(outgoing, withCors(response, options.cors))
+        : await dispatch(request)
+      await sendResponse(outgoing, withCors(response, options.cors), request.method === 'HEAD')
     } catch (error) {
-      await options.onError?.(error, request)
-      if (!outgoing.headersSent) {
-        await sendResponse(outgoing, Response.json({ error: 'Internal Server Error' }, { status: 500 }))
-      } else if (!outgoing.destroyed) {
-        outgoing.destroy(error instanceof Error ? error : undefined)
+      await reportError(error, request)
+      try {
+        if (!outgoing.destroyed && !outgoing.headersSent) {
+          await sendResponse(outgoing, Response.json({ error: 'Internal Server Error' }, { status: 500 }), request?.method === 'HEAD')
+        } else if (!outgoing.destroyed) {
+          outgoing.destroy(error instanceof Error ? error : undefined)
+        }
+      } catch (sendError) {
+        await reportError(sendError, request)
+        outgoing.destroy()
       }
+    } finally {
+      incoming.off('aborted', abort)
+      outgoing.off('close', onClose)
     }
   })
 
@@ -72,26 +114,34 @@ async function startNodeRuntime(
   }
 
   const displayHost = address.family === 'IPv6' ? `[${address.address}]` : address.address
-  let closed = false
-  const close = async () => {
-    if (closed) return
-    closed = true
-    options.signal?.removeEventListener('abort', closeOnAbort)
-
-    await new Promise<void>((resolve, reject) => {
-      const timer = setTimeout(() => {
-        server.closeAllConnections()
-      }, gracePeriod)
-      timer.unref()
-      server.close((error) => {
-        clearTimeout(timer)
-        if (error) reject(error)
-        else resolve()
+  const close = (): Promise<void> => {
+    if (closePromise) return closePromise
+    // Defer application cleanup until the shared promise has stopped admissions.
+    closePromise = Promise.resolve().then(async () => {
+      const transportClosed = new Promise<void>((resolve, reject) => {
+        const timer = setTimeout(() => {
+          server.closeAllConnections()
+        }, gracePeriod)
+        timer.unref()
+        server.close((error) => {
+          clearTimeout(timer)
+          if (error) reject(error)
+          else resolve()
+        })
+        server.closeIdleConnections()
       })
-      server.closeIdleConnections()
+      const results = await Promise.allSettled([
+        transportClosed,
+        Promise.resolve().then(() => application.close?.()),
+      ])
+      for (const result of results) {
+        if (result.status === 'rejected') throw result.reason
+      }
     })
+    options.signal?.removeEventListener('abort', closeOnAbort)
+    return closePromise
   }
-  const closeOnAbort = () => void close()
+  const closeOnAbort = () => { void close().catch((error) => reportError(error)) }
   options.signal?.addEventListener('abort', closeOnAbort, { once: true })
   if (options.signal?.aborted) await close()
 
@@ -99,12 +149,12 @@ async function startNodeRuntime(
     adapter: 'node',
     address: { host: address.address, port: address.port, family: address.family },
     url: `http://${displayHost}:${address.port}`,
-    fetch: application.fetch,
+    fetch: dispatch,
     close,
   }
 }
 
-function toRequest(incoming: IncomingMessage): Request {
+function toRequest(incoming: IncomingMessage, signal: AbortSignal): Request {
   const headers = new Headers()
   for (let index = 0; index < incoming.rawHeaders.length; index += 2) {
     const name = incoming.rawHeaders[index]
@@ -113,7 +163,7 @@ function toRequest(incoming: IncomingMessage): Request {
   }
 
   const method = (incoming.method ?? 'GET').toUpperCase()
-  const init: RequestInit & { duplex?: 'half' } = { method, headers }
+  const init: RequestInit & { duplex?: 'half' } = { method, headers, signal }
   if (method !== 'GET' && method !== 'HEAD') {
     init.body = Readable.toWeb(incoming) as BodyInit
     init.duplex = 'half'
@@ -121,7 +171,23 @@ function toRequest(incoming: IncomingMessage): Request {
   return new Request(`http://${incoming.headers.host ?? 'localhost'}${incoming.url ?? '/'}`, init)
 }
 
-async function sendResponse(outgoing: ServerResponse, response: Response): Promise<void> {
+async function sendResponse(outgoing: ServerResponse, response: Response, head = false): Promise<void> {
+  try {
+    await writeResponse(outgoing, response, head)
+  } catch (error) {
+    // Pipeline owns locked bodies; cancel bodies rejected before it acquired them.
+    if (response.body && !response.body.locked) {
+      try { await response.body.cancel(error) } catch {}
+    }
+    throw error
+  }
+}
+
+async function writeResponse(outgoing: ServerResponse, response: Response, head: boolean): Promise<void> {
+  if (outgoing.destroyed || head) {
+    await response.body?.cancel()
+    if (outgoing.destroyed) return
+  }
   outgoing.statusCode = response.status
   outgoing.statusMessage = response.statusText
 
@@ -136,7 +202,7 @@ async function sendResponse(outgoing: ServerResponse, response: Response): Promi
     if (cookie) outgoing.setHeader('set-cookie', cookie)
   }
 
-  if (!response.body) {
+  if (!response.body || head) {
     outgoing.end()
     return
   }

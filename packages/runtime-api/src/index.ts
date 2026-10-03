@@ -1,5 +1,17 @@
 import type { ApplicationManifest } from '@kunlun-js/build-api'
 
+export type {
+  RuntimeArtifactFile,
+  RuntimeArtifactManifest,
+  RuntimeCapabilityDeclaration,
+  RuntimeCapabilityRequirements,
+  RuntimeExecutionContext,
+  RuntimeFetchEntry,
+  RuntimeFileBinding,
+  RuntimeHttpBinding,
+  RuntimeRequestEnvironment,
+} from './artifact.js'
+
 export type RuntimeMode = 'development' | 'production' | 'test'
 export type CorsSetting = boolean | string | readonly string[]
 
@@ -57,6 +69,8 @@ export class CapabilityRegistry implements CapabilityProvider {
 export interface RuntimeApplication {
   manifest: ApplicationManifest
   fetch(request: Request): Promise<Response>
+  /** Stop admission and release application-owned request resources. */
+  close?(): Promise<void>
 }
 
 export interface RuntimeStartOptions {

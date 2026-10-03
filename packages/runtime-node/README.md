@@ -43,5 +43,18 @@ method, and header fields, and otherwise delegates to the application. Handler f
 connections after the grace period. It is safe to call more than once. Passing an `AbortSignal`
 connects signal abortion to the same close path.
 
+## Scoped request environments and portable artifacts
+
+`createRequestAuthority()` supplies real request-owned filesystem/HTTP bindings from portable
+manifest declarations intersected with trusted deployment grants. `createNodeApplication()`
+uses that provider for a trusted handler; `loadNodeApplication()` admits an integrity-addressed
+`kunlun.runtime-manifest/v1` artifact and executes its closed module snapshot. The artifact
+consumer requires `--experimental-vm-modules` and never falls back to unrestricted disk imports.
+The legacy application path above remains unchanged.
+
+See [Node authority integration](../../docs/runtime-node-authority.md) for the exact grant,
+environment, lifecycle, security, and evidence boundaries, including the unchanged Runtime
+authority probe runner. This implementation slice does not imply full Node/native qualification.
+
 This package is part of [Kunlun Engine](https://github.com/kunlunengine/core), a project of Zixiao
 Laboratories.
