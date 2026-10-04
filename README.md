@@ -41,6 +41,7 @@ manifest.
 - Deterministic `app/` page, nested-layout, dynamic-segment, and Fetch route-handler discovery in
   the first `@kunlun-js/next` v0.2 contract.
 - Contract tests that execute real builds with all four engines.
+- Lightning-powered tests and application/HTTP helpers in `@kunlun-js/test-utils`.
 
 ## Engine support
 
@@ -58,7 +59,8 @@ identical plugin models or lifecycle semantics.
 
 ## Try the source preview
 
-Requires Node.js 20.19 or newer and pnpm 11.
+Working from source requires Node.js 22.12 or newer and pnpm 11 (including the
+Lightning test runner). Public runtime packages retain their Node.js 20.19 minimum.
 
 ```bash
 git clone https://github.com/kunlunengine/core.git
@@ -69,6 +71,11 @@ corepack pnpm test
 corepack pnpm build
 node packages/cli/dist/cli.js engines
 ```
+
+Tests use [Lightning](https://github.com/zixiao-labs/lightning). Run `corepack pnpm test:watch`
+for watch mode. See [`@kunlun-js/test-utils`](./packages/test-utils/README.md) for in-memory
+application tests and suite-scoped HTTP tests. `corepack pnpm test:packages` verifies its packed
+public exports and timeout cleanup in a separate consumer project without source aliases.
 
 Create a project with Nasti, the default engine:
 
@@ -141,6 +148,8 @@ available inside that constructor.
 - `@kunlun-js/next` — convention-driven `app/` route discovery and manifest contract (v0.2 in
   progress).
 - `@kunlun-js/cli` — the `kunlun` command.
+- `@kunlun-js/test-utils` — in-memory application tests, HTTP server helpers, and Lightning
+  suite lifecycle (v0.2 source preview).
 
 ## Roadmap
 

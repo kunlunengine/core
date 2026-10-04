@@ -13,6 +13,10 @@
 - Added npm Trusted Publishing automation with GitHub Actions OIDC.
 - Split the v0.3 workflow milestone into ordered capability slices and started Context7 submission
   preparation with a curated documentation index, parser policy, and expanded public references.
+- Migrated repository tests from Vitest to Lightning 3, raising the contributor Node.js minimum
+  to 22.12 while keeping existing public runtime packages at 20.19.
+- Added `@kunlun-js/test-utils` for in-memory Core application tests, real HTTP tests, explicit
+  capability doubles, and suite-scoped Lightning setup and teardown.
 
 ## 0.1.0 - 2026-08-20
 

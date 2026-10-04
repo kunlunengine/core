@@ -1,5 +1,5 @@
 import { get, request as httpRequest } from 'node:http'
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, vi } from '@lightning-js/lightning'
 import { nodeRuntime } from '../packages/runtime-node/src/index.js'
 import type { RuntimeApplication } from '../packages/runtime-api/src/index.js'
 
@@ -40,7 +40,7 @@ describe('Node reference runtime', () => {
       const response = await fetch(server.url)
       expect(response.status).toBe(500)
       await expect(response.json()).resolves.toEqual({ error: 'Internal Server Error' })
-      expect(onError).toHaveBeenCalledOnce()
+      expect(onError).toHaveBeenCalledTimes(1)
     } finally {
       await server.close()
     }
@@ -75,11 +75,11 @@ describe('Node reference runtime', () => {
     const first = server.close()
     expect(server.close()).toBe(first)
     await expect(server.fetch(new Request(server.url))).rejects.toThrow('closed')
-    await vi.waitFor(() => expect(close).toHaveBeenCalledOnce())
+    await expect.poll(() => close.mock.calls.length).toBe(1)
     finish()
     await first
     expect(server.close()).toBe(first)
-    expect(close).toHaveBeenCalledOnce()
+    expect(close).toHaveBeenCalledTimes(1)
   })
 
   it('keeps a stable 500 when diagnostics throw', async () => {
@@ -116,10 +116,8 @@ describe('Node reference runtime', () => {
         })
         client.once('error', reject)
       })
-      await vi.waitFor(() => {
-        expect(signal.aborted).toBe(true)
-        expect(cancel).toHaveBeenCalledOnce()
-      })
+      await expect.poll(() => signal.aborted).toBe(true)
+      await expect.poll(() => cancel.mock.calls.length).toBe(1)
     } finally {
       await server.close()
     }
@@ -137,7 +135,7 @@ describe('Node reference runtime', () => {
     try {
       expect(await (await fetch(server.url)).text()).toBe('ok')
       expect((await fetch(server.url, { method: 'HEAD' })).status).toBe(200)
-      await vi.waitFor(() => expect(cancel).toHaveBeenCalledOnce())
+      await expect.poll(() => cancel.mock.calls.length).toBe(1)
       expect(signals.every((signal) => !signal.aborted)).toBe(true)
     } finally {
       await server.close()
@@ -163,9 +161,9 @@ describe('Node reference runtime', () => {
       client.write('unfinished upload')
       await ready
       client.destroy()
-      await vi.waitFor(() => expect(signal.aborted).toBe(true))
+      await expect.poll(() => signal.aborted).toBe(true)
       release()
-      await vi.waitFor(() => expect(cancel).toHaveBeenCalledOnce())
+      await expect.poll(() => cancel.mock.calls.length).toBe(1)
     } finally {
       release()
       client.destroy()
@@ -181,6 +179,6 @@ describe('Node reference runtime', () => {
     const server = await nodeRuntime().start(app, { port: 0, signal: controller.signal, onError })
     controller.abort()
     await expect(server.close()).rejects.toThrow('cleanup')
-    await vi.waitFor(() => expect(onError).toHaveBeenCalledOnce())
+    await expect.poll(() => onError.mock.calls.length).toBe(1)
   })
 })

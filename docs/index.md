@@ -6,10 +6,11 @@ This is the documentation entry point for the `kunlunengine/core` repository and
 ## Version scope
 
 The default branch is a source preview of the unreleased v0.2 development line. It declares
-`0.2.0` for `@kunlun-js/core`, `@kunlun-js/cli`, and `@kunlun-js/next`, while several packages on
-npm still have only a `0.1.0` release and the first Next.js-style and runtime packages may not yet
-be published. Use the repository setup below when evaluating default-branch APIs. Do not infer
-that a roadmap item or an unreleased package is available from npm.
+`0.2.0` for `@kunlun-js/core`, `@kunlun-js/cli`, `@kunlun-js/next`, and `@kunlun-js/test-utils`,
+while several packages on npm still have only a `0.1.0` release and the first Next.js-style,
+runtime, and testing packages may not yet be published. Use the repository setup below when
+evaluating default-branch APIs. Do not infer that a roadmap item or an unreleased package is
+available from npm.
 
 ## Choose the right layer
 
@@ -22,6 +23,7 @@ that a roadmap item or an unreleased package is available from npm.
 | Node.js Fetch runtime | [`@kunlun-js/runtime-node`](../packages/runtime-node/README.md) | source preview |
 | Filesystem route and layout discovery | [`@kunlun-js/next`](../packages/next/README.md) | v0.2 source preview |
 | Project creation, build, development, and diagnostics | [`@kunlun-js/cli`](../packages/cli/README.md) | executable source preview |
+| In-memory application and HTTP tests | [`@kunlun-js/test-utils`](../packages/test-utils/README.md) | executable v0.2 source preview |
 
 Kunlun Next.js is a convention layer over the explicit core contracts. “Next.js-style” is a
 description of its direction, not an API, plugin, rendering, or deployment compatibility promise.
@@ -38,6 +40,7 @@ description of its direction, not an API, plugin, rendering, or deployment compa
 - [Node request authority, portable artifact consumption, and evidence boundaries](./runtime-node-authority.md)
 - [Build API](../packages/build-api/README.md) and the engine capability matrix in the
   [repository overview](../README.md#engine-support)
+- [Application testing and Lightning suite lifecycle](../packages/test-utils/README.md)
 
 For maintainers, the repository also contains the [release process](./releasing.md), the
 [repository roadmap](../ROADMAP.md), and the detailed [v0.3 delivery slices](./plans/v0.3-slices.md).
@@ -45,7 +48,8 @@ Roadmap and planning documents describe future gates and are not API reference.
 
 ## Evaluate the source preview
 
-Requirements: Node.js 20.19 or newer and pnpm 11.
+Source-preview requirements: Node.js 22.12 or newer and pnpm 11 (including the
+Lightning test runner). Public runtime packages retain their Node.js 20.19 minimum.
 
 ```bash
 git clone https://github.com/kunlunengine/core.git

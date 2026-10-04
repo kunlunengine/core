@@ -1,7 +1,7 @@
 import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from '@lightning-js/lightning'
 import {
   AppRouteDiscoveryError,
   discoverAppRoutes,
@@ -203,8 +203,8 @@ describe('route handler module contract', () => {
     })
   })
 
-  it('rejects non-function HTTP exports with an actionable source', () => {
-    expect(() => validateRouteHandlerModule({ GET: 'invalid' }, 'api/route.ts')).toThrowError(
+  it('rejects non-function HTTP exports with an actionable source', async () => {
+    await expect(Promise.resolve().then(() => validateRouteHandlerModule({ GET: 'invalid' }, 'api/route.ts'))).rejects.toEqual(
       expect.objectContaining<Partial<RouteHandlerModuleError>>({
         code: 'INVALID_ROUTE_HANDLER_EXPORT',
         source: 'api/route.ts',
@@ -213,8 +213,8 @@ describe('route handler module contract', () => {
     )
   })
 
-  it('rejects explicitly undefined HTTP exports as invalid', () => {
-    expect(() => validateRouteHandlerModule({ GET: undefined }, 'api/route.ts')).toThrowError(
+  it('rejects explicitly undefined HTTP exports as invalid', async () => {
+    await expect(Promise.resolve().then(() => validateRouteHandlerModule({ GET: undefined }, 'api/route.ts'))).rejects.toEqual(
       expect.objectContaining<Partial<RouteHandlerModuleError>>({
         code: 'INVALID_ROUTE_HANDLER_EXPORT',
         source: 'api/route.ts',
@@ -223,8 +223,8 @@ describe('route handler module contract', () => {
     )
   })
 
-  it('requires at least one supported HTTP method', () => {
-    expect(() => validateRouteHandlerModule({ default: () => undefined }, 'api/route.ts')).toThrowError(
+  it('requires at least one supported HTTP method', async () => {
+    await expect(Promise.resolve().then(() => validateRouteHandlerModule({ default: () => undefined }, 'api/route.ts'))).rejects.toEqual(
       expect.objectContaining<Partial<RouteHandlerModuleError>>({
         code: 'MISSING_ROUTE_HANDLER_EXPORT',
         source: 'api/route.ts',
