@@ -52,8 +52,9 @@ try {
     'export default { test: { include: ["consumer.test.ts"] } }\n')
   const fixtures = path.join(root, 'test', 'fixtures', 'test-utils')
   await copyFile(path.join(fixtures, 'consumer.ts'), path.join(consumer, 'consumer.test.ts'))
-  // Root installation already populated the store; no registry or lifecycle scripts are needed.
-  await run(['install', '--offline', '--ignore-scripts'], consumer)
+  // This consumer resolves its own graph without the root lockfile. Reuse cached
+  // packages, but allow downloads when transitive versions differ or the store is empty.
+  await run(['install', '--prefer-offline', '--ignore-scripts'], consumer)
   await run(['exec', 'lightning', 'run'], consumer)
 
   await copyFile(path.join(fixtures, 'timeout.ts'), path.join(consumer, 'consumer.test.ts'))
