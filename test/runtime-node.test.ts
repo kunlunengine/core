@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, vi } from '@lightning-js/lightning'
 import { nodeRuntime } from '../packages/runtime-node/src/index.js'
 import type { RuntimeApplication } from '../packages/runtime-api/src/index.js'
 
@@ -39,7 +39,7 @@ describe('Node reference runtime', () => {
       const response = await fetch(server.url)
       expect(response.status).toBe(500)
       await expect(response.json()).resolves.toEqual({ error: 'Internal Server Error' })
-      expect(onError).toHaveBeenCalledOnce()
+      expect(onError).toHaveBeenCalledTimes(1)
     } finally {
       await server.close()
     }
