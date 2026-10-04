@@ -1,0 +1,39 @@
+{
+  "name": "@kunlun-js/test-utils",
+  "version": "0.2.0",
+  "description": "Application and HTTP testing utilities for Kunlun Engine",
+  "license": "MIT",
+  "author": "Zixiao Laboratories",
+  "homepage": "https://github.com/kunlunengine/core#readme",
+  "repository": { "type": "git", "url": "https://github.com/kunlunengine/core.git", "directory": "packages/test-utils" },
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./runtime": {
+      "types": "./dist/runtime.d.ts",
+      "import": "./dist/runtime.js"
+    },
+    "./e2e": {
+      "types": "./dist/e2e.d.ts",
+      "import": "./dist/e2e.js"
+    }
+  },
+  "files": ["dist"],
+  "engines": { "node": ">=22.12.0" },
+  "dependencies": {
+    "@kunlun-js/core": "workspace:^",
+    "@kunlun-js/runtime-api": "workspace:^",
+    "@kunlun-js/runtime-node": "workspace:^"
+  },
+  "peerDependencies": {
+    "@lightning-js/lightning": "^3.0.0"
+  },
+  "peerDependenciesMeta": {
+    "@lightning-js/lightning": { "optional": true }
+  },
+  "publishConfig": { "access": "public" }
+}
