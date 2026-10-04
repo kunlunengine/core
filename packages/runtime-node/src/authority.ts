@@ -2,8 +2,9 @@ import { AsyncLocalStorage } from 'node:async_hooks'
 import { realpath, stat, open } from 'node:fs/promises'
 import { constants } from 'node:fs'
 import { isAbsolute, relative, resolve, sep } from 'node:path'
-import { request as httpRequest } from 'node:http'
-import { request as httpsRequest } from 'node:https'
+import { Readable } from 'node:stream'
+import { types } from 'node:util'
+import { Agent, type Dispatcher } from 'undici'
 import type { RuntimeCapabilityRequirements, RuntimeRequestEnvironment, RuntimeFetchEntry } from '@kunlun-js/runtime-api'
 
 export interface NodeDeploymentGrants {
@@ -35,6 +36,30 @@ const identity = new AsyncLocalStorage<Scope>()
 const deny = (): never => { throw new NodeAuthorityError() }
 function check(scope: Scope): void {
   if (!scope.active || identity.getStore() !== scope) deny()
+}
+function checkDestination(url: URL, hostname: string): void {
+  if (!['http:', 'https:'].includes(url.protocol) || url.hostname !== hostname || url.username || url.password) deny()
+}
+function requestOptions(init?: RequestInit): RequestInit | undefined {
+  if (!init) return init
+  const source = init.body
+  let body = source
+  // Older supported Node Fetch engines detach binary sources on the first
+  // upload, breaking redirect replay. Blob preserves the exact bytes and its
+  // replay source without changing the caller's buffer or adding a content type.
+  if (types.isArrayBuffer(source) || ArrayBuffer.isView(source)) {
+    const bytes = ArrayBuffer.isView(source)
+      ? new Uint8Array(source.buffer, source.byteOffset, source.byteLength)
+      : new Uint8Array(source)
+    if (bytes.byteLength > limit) deny()
+    body = new Blob([bytes.slice()])
+  }
+  // Snapshot body once, preserving inherited options and accessor receivers.
+  // Use an independent target so frozen init.body can be normalized without
+  // violating Proxy invariants or mutating the caller's options.
+  return new Proxy({}, {
+    get(_target, key) { return key === 'body' ? body : Reflect.get(init, key, init) },
+  })
 }
 function revoke(scope: Scope): void {
   if (!scope.active) return
@@ -189,15 +214,16 @@ export async function createRequestAuthority(capabilities: RuntimeCapabilityRequ
         check(scope)
         if (this !== handle || activeCalls >= 256) deny()
         let request!: Request
-        try { request = new Request(input, init) } catch { deny() }
+        try { request = new Request(input, requestOptions(init)) } catch { deny() }
         const url = new URL(request.url)
-        if (!['http:', 'https:'].includes(url.protocol) || url.hostname !== hostname || url.username || url.password) deny()
+        checkDestination(url, hostname)
+        if (request.headers.has('host') && request.headers.get('host') !== url.host) deny()
         check(scope)
         activeCalls++
         let released = false
         const release = () => { if (!released) { released = true; activeCalls-- } }
         try {
-          const response = await directFetch(scope, request, url, release, trackTransport)
+          const response = await directFetch(scope, request, hostname, release, trackTransport)
           check(scope)
           return response
         }
@@ -260,100 +286,195 @@ export async function createRequestAuthority(capabilities: RuntimeCapabilityRequ
   })
 }
 
-/** Direct node transport: no ambient proxy, and no redirect following. */
-async function directFetch(scope: Scope, request: Request, url: URL, release: () => void, track: (pending: Promise<void>) => void): Promise<Response> {
+/** Capture Node's Fetch engine, never its ambient dispatcher or proxy settings. */
+const nodeFetch = globalThis.fetch
+
+/** One host-call slot owns the entire redirect chain and final response body. */
+async function directFetch(scope: Scope, request: Request, hostname: string, release: () => void, track: (pending: Promise<void>) => void): Promise<Response> {
   check(scope)
   if (request.signal.aborted) { release(); deny() }
-  return new Promise<Response>((resolveResponse, reject) => {
-    const fail = () => reject(new NodeAuthorityError())
-    const transport = url.protocol === 'https:' ? httpsRequest : httpRequest
-    let outgoing: ReturnType<typeof httpRequest>
-    try {
-      const headers = Object.fromEntries(request.headers)
-      if (headers.host !== undefined && headers.host !== url.host) deny()
-      outgoing = transport(url, { method: request.method, headers, agent: false })
-    } catch { release(); fail(); return }
-    track(new Promise<void>(resolve => { outgoing.once('close', resolve) }))
-    let upload: ReadableStreamDefaultReader<Uint8Array> | undefined
-    let completed = false
-    let cleaned = false
-    const cleanup = () => {
-      if (cleaned) return
-      cleaned = true
-      release()
-      outgoing.destroy()
-      void upload?.cancel().catch(() => {})
-      request.signal.removeEventListener('abort', abort)
-      scope.cleanups.delete(abort)
+  // This copy's proxy stream is adapter-owned even when init.body was a
+  // caller-owned stream. Its internal replay source is preserved by Request.
+  if (request.body) request = new Request(request)
+  // A private plain Agent cannot inherit a global proxy/dispatcher. Disabling
+  // keep-alive also prevents a completed request from leaving pooled sockets.
+  const agent = new Agent({ pipelining: 0 })
+  const controller = new AbortController()
+  let settle!: () => void
+  track(new Promise<void>(resolve => { settle = resolve }))
+  let cleaned = false
+  const cleanup = () => {
+    if (cleaned) return
+    cleaned = true
+    controller.abort()
+    release()
+    request.signal.removeEventListener('abort', cleanup)
+    scope.cleanups.delete(cleanup)
+    if (request.body && !request.body.locked) void request.body.cancel().catch(() => {})
+    void agent.destroy().then(settle, settle)
+  }
+  request.signal.addEventListener('abort', cleanup, { once: true })
+  scope.cleanups.add(cleanup)
+
+  // Interpose below Fetch's redirect policy, not around its first response.
+  // This gate runs for *every* destination before a connection can be created.
+  // Keep Request's internal body source intact: turning it into a stream here
+  // would lose buffered-body replay, while cloning a stream can buffer unboundedly.
+  const dispatcher: Pick<Dispatcher, 'dispatch'> = {
+    dispatch(options, handler) {
+      check(scope)
+      if (controller.signal.aborted) deny()
+      // The transport connects to origin. A path beginning "//" is still a
+      // request target, not authority that can replace the connection's host.
+      const origin = new URL(options.origin ?? deny())
+      checkDestination(origin, hostname)
+      return agent.dispatch({
+        ...options,
+        ...(options.body ? { body: Readable.from(boundedUpload(options.body, scope, controller.signal), { objectMode: false }) } : {}),
+      }, guardResponse(handler, options, origin, hostname, request.redirect, scope, controller.signal))
+    },
+  }
+  try {
+    const upstream = await fetchWithUploadCancellation(request, {
+      signal: controller.signal,
+      dispatcher,
+    }, controller.signal)
+    check(scope)
+    const metadata = { url: upstream.url, redirected: upstream.redirected, type: upstream.type }
+    if (!upstream.body) {
+      // Older Node engines mark even an empty upstream body unusable on abort.
+      // Return an independent bodyless response before closing owned transports.
+      const response = new Response(null, { status: upstream.status, statusText: upstream.statusText, headers: upstream.headers })
+      cleanup()
+      return responseMetadata(response, metadata)
     }
-    const abort = () => { cleanup(); fail() }
-    request.signal.addEventListener('abort', abort, { once: true })
-    scope.cleanups.add(abort)
-    outgoing.on('error', () => { cleanup(); fail() })
-    outgoing.on('response', incoming => {
-      try {
-        check(scope)
-        const headers = new Headers()
-        for (const [name, value] of Object.entries(incoming.headers)) {
-          if (value !== undefined) for (const item of Array.isArray(value) ? value : [value]) headers.append(name, item)
-        }
-        const iterator = incoming[Symbol.asyncIterator]()
-        let size = 0
-        const stream = new ReadableStream<Uint8Array>({
-          async pull(controller) {
-            try {
-              check(scope)
-              const item = await Promise.race([iterator.next(), scope.ended])
-              check(scope)
-              if (item.done) { completed = true; controller.close(); cleanup() }
-              else {
-                size += item.value.length
-                if (size > limit) deny()
-                controller.enqueue(new Uint8Array(item.value))
-              }
-            } catch { controller.error(new NodeAuthorityError()); incoming.destroy(); cleanup() }
-          },
-          cancel() {
-            try { check(scope) } finally { incoming.destroy(); cleanup() }
-          },
-        }, { highWaterMark: 0 })
-        const status = incoming.statusCode ?? 500
-        const noBody = request.method === 'HEAD' || [204, 205, 304].includes(status)
-        const response = new Response(noBody ? null : stream, { status, headers })
-        if (noBody) { incoming.destroy(); cleanup() }
-        resolveResponse(response)
-      } catch { incoming.destroy(); cleanup(); fail() }
-    })
-    void (async () => {
-      try {
-        if (request.body) {
-          upload = request.body.getReader()
-          let size = 0
-          while (!completed) {
-            check(scope)
-            const item = await Promise.race([upload.read(), scope.ended])
-            check(scope)
-            if (item.done) break
+    const reader = upstream.body.getReader()
+    let size = 0
+    const stream = new ReadableStream<Uint8Array>({
+      async pull(destination) {
+        try {
+          check(scope)
+          const item = await Promise.race([reader.read(), scope.ended])
+          check(scope)
+          if (item.done) { destination.close(); cleanup() }
+          else {
             size += item.value.byteLength
             if (size > limit) deny()
-            if (!outgoing.write(item.value)) await Promise.race([
-              new Promise<void>((resolve, rejectDrain) => {
-                const remove = () => {
-                  outgoing.removeListener('drain', drained)
-                  outgoing.removeListener('error', failed)
-                  outgoing.removeListener('close', failed)
-                }
-                const drained = () => { remove(); resolve() }
-                const failed = () => { remove(); rejectDrain(new NodeAuthorityError()) }
-                outgoing.once('drain', drained)
-                outgoing.once('error', failed)
-                outgoing.once('close', failed)
-              }), scope.ended,
-            ])
+            destination.enqueue(item.value)
           }
-        }
-        outgoing.end()
-      } catch { cleanup(); fail() }
-    })()
+        } catch { destination.error(new NodeAuthorityError()); cleanup() }
+      },
+      async cancel() {
+        try { check(scope); await reader.cancel() } finally { cleanup() }
+      },
+    }, { highWaterMark: 0 })
+    const response = new Response(stream, { status: upstream.status, statusText: upstream.statusText, headers: upstream.headers })
+    return responseMetadata(response, metadata)
+  } catch { cleanup(); return deny() }
+}
+
+/** Check redirect URLs before Fetch erases credentials, and count wire bytes before decoding. */
+function guardResponse(handler: Dispatcher.DispatchHandler, options: Dispatcher.DispatchOptions, origin: URL, hostname: string, redirect: RequestRedirect, scope: Scope, signal: AbortSignal): Dispatcher.DispatchHandler {
+  const receiveHeaders = handler.onHeaders ?? deny()
+  const receiveData = handler.onData ?? deny()
+  let size = 0
+  const onHeaders: NonNullable<Dispatcher.DispatchHandler['onHeaders']> = (status, headers, resume, statusText) => {
+    if (!scope.active || signal.aborted) deny()
+    if (redirect === 'follow' && [301, 302, 303, 307, 308].includes(status)) {
+      const locations: string[] = []
+      for (let index = 0; index < headers.length; index += 2) {
+        if (headers[index]!.toString('latin1').toLowerCase() === 'location') locations.push(headers[index + 1]!.toString('latin1'))
+      }
+      if (locations.length) {
+        // Concatenate the origin and request target: resolving a leading "//"
+        // target would incorrectly replace the connection authority.
+        const current = new URL(origin.origin + options.path)
+        checkDestination(new URL(locations.join(', '), current), hostname)
+      }
+    }
+    return receiveHeaders.call(handler, status, headers, resume, statusText)
+  }
+  const onData: NonNullable<Dispatcher.DispatchHandler['onData']> = chunk => {
+    if (!scope.active || signal.aborted) deny()
+    size += chunk.byteLength
+    if (size > limit) deny()
+    return receiveData.call(handler, chunk)
+  }
+  // Delegate all other callbacks with their original receiver, including methods
+  // inherited from a handler's prototype. Do not copy mutable handler state.
+  return new Proxy(handler, {
+    get(target, key) {
+      if (key === 'onHeaders') return onHeaders
+      if (key === 'onData') return onData
+      const value = Reflect.get(target, key, target)
+      return typeof value === 'function' ? value.bind(target) : value
+    },
   })
+}
+
+/** A stream wrapper and all of its clones retain the Fetch engine's metadata. */
+function responseMetadata(response: Response, metadata: Pick<Response, 'url' | 'redirected' | 'type'>): Response {
+  const clone = response.clone.bind(response)
+  Object.defineProperties(response, {
+    url: { value: metadata.url },
+    redirected: { value: metadata.redirected },
+    type: { value: metadata.type },
+    clone: { value: () => responseMetadata(clone(), metadata) },
+  })
+  return response
+}
+
+/**
+ * Node copies a Request body with pipeThrough during synchronous Fetch admission.
+ * Give that transfer a cancellation signal: aborting Fetch alone cannot cancel a
+ * source reader already locked inside its pending upload iterator.
+ *
+ * Only this adapter-owned stream is interposed, only during admission. No global
+ * prototypes or private Request fields are touched, and body replay metadata is
+ * unchanged. The stalled-upload regression must cover supported Node versions.
+ */
+function fetchWithUploadCancellation(request: Request, init: RequestInit & { dispatcher: Pick<Dispatcher, 'dispatch'> }, signal: AbortSignal): Promise<Response> {
+  const body = request.body
+  if (!body) return nodeFetch(request, init)
+  const pipeThrough = body.pipeThrough
+  let transferred = false
+  Object.defineProperty(body, 'pipeThrough', {
+    configurable: true,
+    value(transform: ReadableWritablePair<Uint8Array, Uint8Array>, options?: StreamPipeOptions) {
+      transferred = true
+      return pipeThrough.call(body, transform, {
+        ...options,
+        signal: options?.signal ? AbortSignal.any([options.signal, signal]) : signal,
+      })
+    },
+  })
+  try {
+    const pending = nodeFetch(request, {
+      ...init,
+      dispatcher: {
+        dispatch(options, handler) {
+          if (!transferred) deny()
+          return init.dispatcher.dispatch(options, handler)
+        },
+      },
+    } as RequestInit & { dispatcher: Pick<Dispatcher, 'dispatch'> })
+    // A future Node engine must not silently bypass the ownership bridge.
+    if (!transferred) { void pending.catch(() => {}); deny() }
+    return pending
+  }
+  finally { Reflect.deleteProperty(body, 'pipeThrough') }
+}
+
+/** Bound each actual upload, including buffered-body replays, without prebuffering. */
+async function* boundedUpload(body: NonNullable<Dispatcher.DispatchOptions['body']>, scope: Scope, signal: AbortSignal): AsyncGenerator<Uint8Array> {
+  const chunks = typeof body === 'string' || types.isUint8Array(body) ? [body] : body
+  let size = 0
+  for await (const chunk of chunks) {
+    if (!scope.active || signal.aborted) deny()
+    const bytes = typeof chunk === 'string' ? Buffer.from(chunk) : chunk
+    if (!types.isUint8Array(bytes)) deny()
+    size += bytes.byteLength
+    if (size > limit) deny()
+    yield bytes
+  }
 }

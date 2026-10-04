@@ -79,8 +79,42 @@ Host roots and caller credentials are not projected into `env`.
 File reads are bounded UTF-8 reads within the canonical binding root. Absolute
 paths, parent traversal, symlink escapes, missing/nonregular files, and invalid
 UTF-8 are denied. HTTP uses direct Node transports rather than ambient proxy
-configuration. Redirects are returned without automatic following: even a second
-admitted host is not authority carried by the first host's handle.
+configuration or the global Fetch dispatcher. Each HTTP call owns a private
+plain Undici Agent; the Fetch engine's dispatcher checks every destination before
+connecting. Node's Fetch engine owns redirect semantics, not the transport:
+
+- Default/`follow` follows at most 20 redirects, with the exact handle hostname,
+  HTTP(S) scheme, and absence of URL credentials checked at every hop. Even a
+  second admitted host is not authority carried by the first host's handle.
+- `manual` returns the redirect status, headers, and body without following.
+  `error` rejects redirects. Denials and transport failures remain redacted.
+- POST 301/302 and non-GET/HEAD 303 rewrite to GET and drop body headers.
+  HEAD 303 remains HEAD. String/Blob bodies, including those in `Request` inputs,
+  replay where required; non-replayable streaming bodies reject non-303 redirects.
+  Explicit binary `RequestInit.body` is snapshotted into a Blob to preserve replay
+  on older supported Node engines without detaching the caller's buffer.
+- Cross-origin hops, including the same hostname on a new port, drop
+  Authorization, Cookie, and Proxy-Authorization and regenerate Host.
+
+The entire redirect chain and final response share one host-call slot. Uploads
+and both wire/decoded responses remain bounded to 1 MiB without eagerly buffering
+streams. Owned Agents are destroyed and drained on completion, cancellation, failure, or
+revocation. A scoped compatibility shim makes Node's Request-copy body transfer
+abortable through its public `pipeThrough` call, so a stalled upload is canceled
+even after an early redirect. It touches only an adapter-owned stream during
+synchronous admission, never global prototypes or private Request fields, and
+denies admission if a future Node implementation bypasses the transfer hook.
+The stalled-upload and buffered-Request replay tests protect this dependency on
+Node's implementation.
+
+Some body forms remain **unqualified upstream Fetch behavior**, not portable
+parity claims: an already-created byte-backed Node `Request` can fail replay on
+Node 20/22 because its opaque source buffer is detached; use an explicit binary
+`RequestInit.body` or construct the Request with a Blob instead. Multipart
+FormData redirect replay also inherits Node's boundary-reencoding limitation and
+is not part of the shared Runtime body contract. The provider does not inspect
+private Request state, guess replayability, or turn streams into buffered bodies
+to hide these limitations.
 
 Invocation return, failure, cancellation, and application shutdown revoke
 request authority and cancel owned host work. Fetch handlers retain their scope
@@ -143,6 +177,23 @@ for each of four platforms. One local Node run proves only the current
 not qualify HTTP parity, request context, revocation, all diagnostics, generated
 producer artifacts, full inbound lifecycle, or the complete #50/#53 corpus.
 
+Runtime's separate development HTTP checker runs its unchanged shared HTTP and
+revocation fixtures against this package's actual build. With a matching native
+report, it compares the raw observations, traffic, lifecycle results, and source
+hashes without treating a returned 302 as denial:
+
+```sh
+pnpm exec tsc -b packages/runtime-node --force --pretty false
+node /path/to/runtime/distribution/jsc/scripts/check-authority-http.mjs \
+  --core-root "$PWD" \
+  --native /path/to/native-http.json \
+  --output /path/to/new-node-http.json
+```
+
+This checker is also `qualification: false`. A successful local system-JSC/Node
+comparison is development evidence, not physical pinned-JSC matrix qualification
+and not grounds to close Runtime #50 or #53.
+
 ## Remaining cross-repository gates
 
 - Runtime's retained macOS launcher fix (`/usr/bin/env` stripping
@@ -152,5 +203,5 @@ producer artifacts, full inbound lifecycle, or the complete #50/#53 corpus.
 - Runtime #51 owns native inbound HTTP/lifecycle integration.
 - Runtime #52 and Core's producer work must qualify an actual BuildEngine-emitted
   portable artifact; the consumer implemented here does not claim emission.
-- Expand the shared corpus before treating local HTTP/cancellation tests as
-  cross-adapter qualification. Do not use this slice to close #50 or #53.
+- The development HTTP corpus and local HTTP/cancellation tests are not the full
+  cross-adapter qualification corpus. Do not use this slice to close #50 or #53.

@@ -17,7 +17,8 @@
   "files": ["dist"],
   "engines": { "node": ">=20.19.0" },
   "dependencies": {
-    "@kunlun-js/runtime-api": "workspace:^"
+    "@kunlun-js/runtime-api": "workspace:^",
+    "undici": "^7.30.0"
   },
   "publishConfig": { "access": "public" }
 }
