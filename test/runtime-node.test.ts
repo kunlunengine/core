@@ -137,7 +137,7 @@ describe('Node reference runtime', () => {
     try {
       expect(await (await fetch(server.url)).text()).toBe('ok')
       expect((await fetch(server.url, { method: 'HEAD' })).status).toBe(200)
-      expect(cancel).toHaveBeenCalledOnce()
+      await vi.waitFor(() => expect(cancel).toHaveBeenCalledOnce())
       expect(signals.every((signal) => !signal.aborted)).toBe(true)
     } finally {
       await server.close()

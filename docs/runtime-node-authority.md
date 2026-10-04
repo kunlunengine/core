@@ -96,9 +96,9 @@ not native `cap-std` atomic root-relative traversal. It is not qualification of
 adversarial filesystem mutation by an independent process.
 
 The v1 entry context has a cancellation signal. Background `ctx.waitUntil()`
-is explicitly unsupported in this slice; calls reject rather than silently
-outliving request authority. Full background-work/lifecycle compatibility is
-still a separate acceptance item.
+is explicitly unsupported in this slice; calls throw synchronously rather than
+silently outliving request authority. Full background-work/lifecycle
+compatibility is still a separate acceptance item.
 
 Neither Node `vm` nor a JavaScriptCore realm is hostile-code isolation. Trusted
 in-process handlers can still import Node APIs themselves; the scoped provider

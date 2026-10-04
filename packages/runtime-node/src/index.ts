@@ -130,10 +130,10 @@ async function startNodeRuntime(
         })
         server.closeIdleConnections()
       })
-      const results = await Promise.allSettled([
-        transportClosed,
+      const results = await Promise.allSettled([transportClosed])
+      results.push(...await Promise.allSettled([
         Promise.resolve().then(() => application.close?.()),
-      ])
+      ]))
       for (const result of results) {
         if (result.status === 'rejected') throw result.reason
       }
