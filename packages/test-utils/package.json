@@ -30,7 +30,7 @@
     "@kunlun-js/runtime-node": "workspace:^"
   },
   "peerDependencies": {
-    "@lightning-js/lightning": "^3.0.0"
+    "@lightning-js/lightning": "^3.1.0"
   },
   "peerDependenciesMeta": {
     "@lightning-js/lightning": { "optional": true }

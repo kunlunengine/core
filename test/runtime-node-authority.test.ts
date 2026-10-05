@@ -4,6 +4,9 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import * as nodeHttp from 'node:http'
 import { createServer, type Server, type RequestListener } from 'node:http'
+import { runInNewContext } from 'node:vm'
+import { gzipSync } from 'node:zlib'
+import { Agent, getGlobalDispatcher, setGlobalDispatcher } from 'undici'
 import type { RuntimeRequestEnvironment, RuntimeCapabilityRequirements } from '../packages/runtime-api/src/artifact.js'
 import { createRequestAuthority, NodeAuthorityError, type NodeRequestAuthority, type NodeDeploymentGrants } from '../packages/runtime-node/src/authority.js'
 
@@ -20,13 +23,13 @@ async function authority(caps = requirements, grants: NodeDeploymentGrants = { f
   authorities.push(result)
   return result
 }
-async function listener(handler: RequestListener) {
+async function listener(handler: RequestListener, hostname = '127.0.0.1') {
   const server = createServer(handler)
   servers.push(server)
-  await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve))
+  await new Promise<void>(resolve => server.listen(0, hostname, resolve))
   const address = server.address()
   if (!address || typeof address === 'string') throw new Error('no address')
-  return `http://127.0.0.1:${address.port}`
+  return `http://${hostname}:${address.port}`
 }
 beforeEach(async () => {
   directory = await mkdtemp(join(tmpdir(), 'authority-'))
@@ -163,11 +166,14 @@ describe('Node request authority', () => {
     await expect(retained.fs['public-data']!.readTextFile('message.txt')).rejects.toThrow(NodeAuthorityError)
   })
 
-  it('uses real direct HTTP and returns redirects manually even with follow requested', async () => {
+  it('denies escaped redirects even to another admitted host before any destination traffic', async () => {
     let hits = 0
+    let forbiddenHits = 0
+    const destination = await listener((_request, response) => { forbiddenHits++; response.end('forbidden') })
+    const location = destination.replace('127.0.0.1', 'localhost') + '/private?secret=credential'
     const base = await listener((_request, response) => {
       hits++
-      response.writeHead(302, { location: 'http://localhost/next' })
+      response.writeHead(302, { location })
       response.end('redirect')
     })
     const host = await authority({
@@ -175,8 +181,12 @@ describe('Node request authority', () => {
     }, { http: ['127.0.0.1', 'localhost'] })
     await host.invoke(async env => {
       const handle = env.http['127.0.0.1']!
-      const result = await handle.fetch(base, { redirect: 'follow' })
+      await expect(handle.fetch(base)).rejects.toThrow(NodeAuthorityError)
+      await expect(handle.fetch(base, { redirect: 'follow' })).rejects.toThrow('Request authority denied or ended')
+      const result = await handle.fetch(base, { redirect: 'manual' })
       expect(result.status).toBe(302)
+      expect(result.headers.get('location')).toBe(location)
+      expect(result.redirected).toBe(false)
       expect(await result.text()).toBe('redirect')
       for (const url of ['http://localhost/', 'file:///secret', 'http://user:password@127.0.0.1/']) {
         await expect(handle.fetch(url)).rejects.toThrow(NodeAuthorityError)
@@ -184,7 +194,349 @@ describe('Node request authority', () => {
       await expect(handle.fetch.call({ ...handle }, base)).rejects.toThrow(NodeAuthorityError)
       await expect(handle.fetch(base, { headers: { host: 'other.example' } })).rejects.toThrow(NodeAuthorityError)
     })
-    expect(hits).toBe(1)
+    expect(hits).toBe(3)
+    expect(forbiddenHits).toBe(0)
+  })
+
+  it('follows relative same-host redirects and reports the final URL', async () => {
+    const traffic: string[] = []
+    const base = await listener((request, response) => {
+      traffic.push(request.url!)
+      if (request.url === '/start') response.writeHead(302, { location: 'middle' }).end('discard')
+      else if (request.url === '/middle') response.writeHead(307, { location: '/ok' }).end('discard')
+      else response.end('allowed')
+    })
+    const host = await authority({ required: [{ name: 'http.host', resource: '127.0.0.1' }], optional: [] }, { http: ['127.0.0.1'] })
+    await host.invoke(async env => {
+      for (const init of [undefined, { redirect: 'follow' as const }]) {
+        const result = await env.http['127.0.0.1']!.fetch(base + '/start', init)
+        expect(result.status).toBe(200)
+        expect(result.url).toBe(base + '/ok')
+        expect(result.redirected).toBe(true)
+        const clone = result.clone()
+        const secondClone = clone.clone()
+        for (const copy of [clone, secondClone]) {
+          expect(copy.url).toBe(result.url)
+          expect(copy.redirected).toBe(true)
+          expect(copy.type).toBe(result.type)
+        }
+        expect(await Promise.all([result.text(), clone.text(), secondClone.text()])).toEqual(['allowed', 'allowed', 'allowed'])
+      }
+    })
+    expect(traffic).toEqual(['/start', '/middle', '/ok', '/start', '/middle', '/ok'])
+  })
+
+  it('checks the connection origin rather than treating a double-slash path as authority', async () => {
+    let forbiddenHits = 0
+    const destination = await listener((_request, response) => { forbiddenHits++; response.end('other host') }, 'localhost')
+    const base = await listener((request, response) => {
+      if (request.url === '/escape') response.writeHead(302, { location: destination + '//127.0.0.1/private' }).end()
+      else response.end('allowed path')
+    })
+    const host = await authority({
+      required: [{ name: 'http.host', resource: '127.0.0.1' }, { name: 'http.host', resource: 'localhost' }], optional: [],
+    }, { http: ['127.0.0.1', 'localhost'] })
+    await host.invoke(async env => {
+      // Verify the forbidden destination really is reachable, not just refusing
+      // an unauthorized connection which could otherwise mask a gate bypass.
+      expect(await (await env.http.localhost!.fetch(destination)).text()).toBe('other host')
+      forbiddenHits = 0
+      await expect(env.http['127.0.0.1']!.fetch(base + '/escape')).rejects.toThrow(NodeAuthorityError)
+      expect(await (await env.http['127.0.0.1']!.fetch(base + '//localhost/allowed')).text()).toBe('allowed path')
+    })
+    expect(forbiddenHits).toBe(0)
+  })
+
+  it('applies the same destination checks at later hops and rejects unsafe Location URLs', async () => {
+    const traffic: string[] = []
+    const base = await listener((request, response) => {
+      traffic.push(request.url!)
+      const location = request.url === '/first' ? '/escape' : request.url === '/escape'
+        ? 'http://localhost/forbidden'
+        : decodeURIComponent(request.url!.slice(1))
+      response.writeHead(302, { location }).end()
+    })
+    const host = await authority({ required: [{ name: 'http.host', resource: '127.0.0.1' }], optional: [] }, { http: ['127.0.0.1'] })
+    await host.invoke(async env => {
+      const handle = env.http['127.0.0.1']!
+      await expect(handle.fetch(base + '/first')).rejects.toThrow(NodeAuthorityError)
+      for (const location of ['file:///secret', 'data:text/plain,private', 'http://user:password@127.0.0.1/', 'http://[invalid']) {
+        const url = base + '/' + encodeURIComponent(location)
+        await expect(handle.fetch(url)).rejects.toThrow('Request authority denied or ended')
+      }
+    })
+    expect(traffic.slice(0, 2)).toEqual(['/first', '/escape'])
+    expect(traffic).toHaveLength(6)
+  })
+
+  it('denies credential-bearing redirect URLs regardless of caller-controlled Request mode', async () => {
+    let forbiddenHits = 0
+    const base = await listener((request, response) => {
+      if (request.url === '/forbidden') { forbiddenHits++; response.end('escaped') }
+      else response.writeHead(302, { location: base.replace('http://', 'http://user:password@') + '/forbidden' }).end()
+    })
+    const host = await authority({ required: [{ name: 'http.host', resource: '127.0.0.1' }], optional: [] }, { http: ['127.0.0.1'] })
+    await host.invoke(async env => {
+      for (const mode of ['cors', 'same-origin', 'no-cors'] as const) {
+        await expect(env.http['127.0.0.1']!.fetch(new Request(base, { mode }))).rejects.toThrow(NodeAuthorityError)
+        const manual = await env.http['127.0.0.1']!.fetch(new Request(base, { mode, redirect: 'manual' }))
+        expect(manual.status).toBe(302)
+        expect(manual.headers.get('location')).toContain('user:password@')
+        await manual.body!.cancel()
+      }
+    })
+    expect(forbiddenHits).toBe(0)
+  })
+
+  it('returns manual redirects and rejects error mode without following or draining a stalled body', async () => {
+    const traffic: string[] = []
+    const base = await listener((request, response) => {
+      traffic.push(request.url!)
+      response.writeHead(302, { location: '/never' })
+      response.write('redirect')
+      // Deliberately never end: redirect/error cleanup must not drain this body.
+    })
+    const host = await authority({ required: [{ name: 'http.host', resource: '127.0.0.1' }], optional: [] }, { http: ['127.0.0.1'] })
+    await host.invoke(async env => {
+      const handle = env.http['127.0.0.1']!
+      const result = await handle.fetch(base + '/manual', { redirect: 'manual' })
+      expect(result.status).toBe(302)
+      expect(result.headers.get('location')).toBe('/never')
+      await result.body!.cancel()
+      await expect(handle.fetch(base + '/error', { redirect: 'error' })).rejects.toThrow(NodeAuthorityError)
+    })
+    expect(traffic).toEqual(['/manual', '/error'])
+  })
+
+  it('permits 20 redirects but rejects hop 21 and releases the host-call budget after denial', async () => {
+    let hits = 0
+    const base = await listener((request, response) => {
+      hits++
+      const count = Number(request.url!.slice(1))
+      if (count === 0) response.end('done')
+      else response.writeHead(302, { location: `/${count - 1}` }).end()
+    })
+    const host = await authority({ required: [{ name: 'http.host', resource: '127.0.0.1' }], optional: [] }, { http: ['127.0.0.1'] })
+    await host.invoke(async env => {
+      const handle = env.http['127.0.0.1']!
+      expect(await (await handle.fetch(base + '/20')).text()).toBe('done')
+      expect(hits).toBe(21)
+      await expect(handle.fetch(base + '/21')).rejects.toThrow(NodeAuthorityError)
+      expect(hits).toBe(42)
+      for (let index = 0; index < 256; index++) {
+        await expect(handle.fetch(base + '/21')).rejects.toThrow(NodeAuthorityError)
+      }
+      expect(await (await handle.fetch(base + '/0')).text()).toBe('done')
+    })
+  })
+
+  it('rewrites methods and body headers, preserves HEAD, and replays buffered bodies including Request inputs', async () => {
+    const received: { path: string; method: string; body: string; headers: nodeHttp.IncomingHttpHeaders }[] = []
+    const base = await listener(async (request, response) => {
+      const chunks: Buffer[] = []
+      for await (const chunk of request) chunks.push(chunk)
+      received.push({ path: request.url!, method: request.method!, body: Buffer.concat(chunks).toString(), headers: request.headers })
+      if (request.url!.startsWith('/redirect/')) response.writeHead(Number(request.url!.split('/')[2]), { location: '/final' }).end()
+      else response.end('done')
+    })
+    const host = await authority({ required: [{ name: 'http.host', resource: '127.0.0.1' }], optional: [] }, { http: ['127.0.0.1'] })
+    await host.invoke(async env => {
+      for (const [status, method, finalMethod] of [
+        [301, 'POST', 'GET'], [302, 'POST', 'GET'], [303, 'PUT', 'GET'],
+        [303, 'HEAD', 'HEAD'], [301, 'PUT', 'PUT'], [307, 'POST', 'POST'], [308, 'POST', 'POST'],
+      ] as const) {
+        const input = new Request(`${base}/redirect/${status}`, {
+          method, ...(method === 'HEAD' ? {} : { body: 'pay' }),
+          headers: {
+            'content-type': 'application/example', 'content-encoding': 'identity',
+            'content-language': 'en', 'content-location': '/source', 'x-retained': 'yes',
+          },
+        })
+        const result = await env.http['127.0.0.1']!.fetch(input)
+        expect(result.status).toBe(200)
+        expect(await result.text()).toBe(method === 'HEAD' ? '' : 'done')
+        const final = received.at(-1)!
+        expect(final.method).toBe(finalMethod)
+        expect(final.body).toBe(finalMethod === 'GET' || finalMethod === 'HEAD' ? '' : 'pay')
+        expect(final.headers['x-retained']).toBe('yes')
+        for (const header of ['content-type', 'content-encoding', 'content-language', 'content-location']) {
+          expect(final.headers[header]).toBe(finalMethod === 'GET' ? undefined : input.headers.get(header))
+        }
+      }
+    })
+    expect(received).toHaveLength(14)
+  })
+
+  it('replays explicit binary BodyInit without detaching the caller buffer on supported Node engines', async () => {
+    const received: Buffer[] = []
+    const base = await listener(async (request, response) => {
+      const chunks: Buffer[] = []
+      for await (const chunk of request) chunks.push(chunk)
+      received.push(Buffer.concat(chunks))
+      if (request.url === '/start') response.writeHead(308, { location: '/final' }).end()
+      else response.end('done')
+    })
+    const host = await authority({ required: [{ name: 'http.host', resource: '127.0.0.1' }], optional: [] }, { http: ['127.0.0.1'] })
+    const bytes = new Uint8Array([1, 2, 3])
+    const realmBytes = runInNewContext('new Uint8Array([1, 2, 3])') as Uint8Array
+    await host.invoke(async env => {
+      for (const body of [bytes, bytes.buffer, new DataView(bytes.buffer), realmBytes, new Blob([bytes])]) {
+        let reads = 0
+        const prototype = { method: 'POST', get body() { reads++; return body } }
+        const init = Object.create(prototype) as RequestInit
+        expect(await (await env.http['127.0.0.1']!.fetch(base + '/start', init)).text()).toBe('done')
+        expect(reads).toBe(1)
+      }
+    })
+    expect([...bytes]).toEqual([1, 2, 3])
+    expect([...realmBytes]).toEqual([1, 2, 3])
+    expect(received).toHaveLength(10)
+    for (const body of received) expect([...body]).toEqual([1, 2, 3])
+  })
+
+  it('normalizes frozen binary request options without mutating the caller', async () => {
+    const bytes = new Uint8Array([1, 2, 3])
+    const init = Object.freeze({ method: 'POST', body: bytes })
+    const base = await listener(async (request, response) => {
+      const chunks: Buffer[] = []
+      for await (const chunk of request) chunks.push(chunk)
+      response.end(Buffer.concat(chunks))
+    })
+    const host = await authority({ required: [{ name: 'http.host', resource: '127.0.0.1' }], optional: [] }, { http: ['127.0.0.1'] })
+    await host.invoke(async env => {
+      const result = await env.http['127.0.0.1']!.fetch(base, init)
+      expect([...new Uint8Array(await result.arrayBuffer())]).toEqual([1, 2, 3])
+    })
+    expect(init.body).toBe(bytes)
+    expect([...bytes]).toEqual([1, 2, 3])
+    expect(Object.isFrozen(init)).toBe(true)
+  })
+
+  it('strips sensitive headers on same-host cross-origin redirects and regenerates Host', async () => {
+    const received: nodeHttp.IncomingHttpHeaders[] = []
+    const destination = await listener((request, response) => { received.push(request.headers); response.end('done') })
+    const base = await listener((request, response) => {
+      received.push(request.headers)
+      response.writeHead(302, { location: destination }).end()
+    })
+    const host = await authority({ required: [{ name: 'http.host', resource: '127.0.0.1' }], optional: [] }, { http: ['127.0.0.1'] })
+    await host.invoke(async env => {
+      const result = await env.http['127.0.0.1']!.fetch(base, {
+        headers: { authorization: 'private', cookie: 'private', 'proxy-authorization': 'private', host: new URL(base).host },
+      })
+      expect(await result.text()).toBe('done')
+    })
+    expect(received).toHaveLength(2)
+    for (const header of ['authorization', 'cookie', 'proxy-authorization']) {
+      expect(received[0]![header]).toBe('private')
+      expect(received[1]![header]).toBeUndefined()
+    }
+    expect(received[1]!.host).toBe(new URL(destination).host)
+  })
+
+  it('rejects streaming-body replay instead of buffering or resending a consumed stream', async () => {
+    const traffic: string[] = []
+    const base = await listener(async (request, response) => {
+      for await (const _chunk of request) {}
+      traffic.push(request.url!)
+      response.writeHead(Number(request.url!.slice(1)), { location: '/never' }).end()
+    })
+    const host = await authority({ required: [{ name: 'http.host', resource: '127.0.0.1' }], optional: [] }, { http: ['127.0.0.1'] })
+    await host.invoke(async env => {
+      for (const status of [307, 308]) {
+        const body = new ReadableStream<Uint8Array>({
+          start(controller) { controller.enqueue(new Uint8Array([1, 2, 3])); controller.close() },
+        })
+        const input = new Request(`${base}/${status}`, { method: 'POST', body, duplex: 'half' } as RequestInit)
+        await expect(env.http['127.0.0.1']!.fetch(input)).rejects.toThrow(NodeAuthorityError)
+      }
+    })
+    expect(traffic).toEqual(['/307', '/308'])
+  })
+
+  it('accepts streamed bytes from an artifact realm but only permits a 303 rewrite', async () => {
+    const traffic: string[] = []
+    const base = await listener(async (request, response) => {
+      for await (const _chunk of request) {}
+      traffic.push(request.url!)
+      if (request.url === '/final') response.end(request.method)
+      else response.writeHead(Number(request.url!.slice(1)), { location: '/final' }).end()
+    })
+    const host = await authority({ required: [{ name: 'http.host', resource: '127.0.0.1' }], optional: [] }, { http: ['127.0.0.1'] })
+    await host.invoke(async env => {
+      for (const status of [301, 302, 303, 307, 308]) {
+        const body = runInNewContext(`new ReadableStream({
+          start(controller) { controller.enqueue(new Uint8Array([1, 2, 3])); controller.close() }
+        })`, { ReadableStream }) as ReadableStream<Uint8Array>
+        const input = new Request(`${base}/${status}`, { method: 'POST', body, duplex: 'half' } as RequestInit)
+        if (status === 303) expect(await (await env.http['127.0.0.1']!.fetch(input)).text()).toBe('GET')
+        else await expect(env.http['127.0.0.1']!.fetch(input)).rejects.toThrow(NodeAuthorityError)
+      }
+    })
+    expect(traffic).toEqual(['/301', '/302', '/303', '/final', '/307', '/308'])
+  })
+
+  it('aborts between redirect hops without following and leaves later calls in the scope usable', async () => {
+    let acknowledge!: () => void
+    const received = new Promise<void>(resolve => { acknowledge = resolve })
+    let redirect!: nodeHttp.ServerResponse
+    const traffic: string[] = []
+    const base = await listener((request, response) => {
+      traffic.push(request.url!)
+      if (request.url === '/first') { redirect = response; acknowledge() }
+      else response.end('allowed')
+    })
+    const host = await authority({ required: [{ name: 'http.host', resource: '127.0.0.1' }], optional: [] }, { http: ['127.0.0.1'] })
+    await host.invoke(async env => {
+      const controller = new AbortController()
+      const pending = env.http['127.0.0.1']!.fetch(base + '/first', { signal: controller.signal })
+      const rejected = expect(pending).rejects.toThrow(NodeAuthorityError)
+      await received
+      controller.abort()
+      await rejected
+      redirect.writeHead(302, { location: '/never' }).end()
+      expect(await (await env.http['127.0.0.1']!.fetch(base + '/ok')).text()).toBe('allowed')
+    })
+    expect(traffic).toEqual(['/first', '/ok'])
+  })
+
+  it('cancels a stalled upload when an early redirect cannot replay it', async () => {
+    let canceled!: () => void
+    const cancellation = new Promise<void>(resolve => { canceled = resolve })
+    const base = await listener((request, response) => {
+      request.once('data', () => response.writeHead(307, { location: '/never' }).end())
+    })
+    const host = await authority({ required: [{ name: 'http.host', resource: '127.0.0.1' }], optional: [] }, { http: ['127.0.0.1'] })
+    await host.invoke(async env => {
+      const body = new ReadableStream<Uint8Array>({
+        start(controller) { controller.enqueue(new Uint8Array([1, 2, 3])) },
+        pull() { return new Promise<void>(() => {}) },
+        cancel() { canceled() },
+      })
+      const input = new Request(base, { method: 'POST', body, duplex: 'half' } as RequestInit)
+      await expect(env.http['127.0.0.1']!.fetch(input)).rejects.toThrow(NodeAuthorityError)
+    })
+    await cancellation
+  }, 3_000)
+
+  it('ignores the ambient Fetch dispatcher through allowed redirects', async () => {
+    let ambientHits = 0
+    const previous = getGlobalDispatcher()
+    const ambient = new Agent({
+      connect(_options, callback) { ambientHits++; callback(new Error('ambient transport'), null) },
+    })
+    setGlobalDispatcher(ambient)
+    try {
+      const base = await listener((request, response) => {
+        if (request.url === '/start') response.writeHead(302, { location: '/ok' }).end()
+        else response.end('direct')
+      })
+      const host = await authority({ required: [{ name: 'http.host', resource: '127.0.0.1' }], optional: [] }, { http: ['127.0.0.1'] })
+      await host.invoke(async env => {
+        expect(await (await env.http['127.0.0.1']!.fetch(base + '/start')).text()).toBe('direct')
+      })
+      expect(ambientHits).toBe(0)
+    } finally { setGlobalDispatcher(previous); await ambient.destroy() }
   })
 
   it('keeps returned application streams alive in their owning context, then revokes on EOF and cancel', async () => {
@@ -244,6 +596,25 @@ describe('Node request authority', () => {
     await host.invoke(async env => {
       await expect((await env.http['127.0.0.1']!.fetch(base)).text()).rejects.toThrow(NodeAuthorityError)
       await expect(env.http['127.0.0.1']!.fetch('http://127.0.0.1:1/private')).rejects.toThrow('Request authority denied or ended')
+    })
+  })
+
+  it('bounds both encoded wire bytes and decoded response bytes', async () => {
+    // Concatenated empty members consume >1 MiB on the wire but decode to zero.
+    const member = gzipSync(Buffer.alloc(0))
+    const encoded = Buffer.concat(Array<Buffer>(60_000).fill(member))
+    const decoded = gzipSync(Buffer.alloc(1024 * 1024 + 1))
+    const base = await listener((request, response) => {
+      response.writeHead(200, { 'content-encoding': 'gzip' })
+      // Explicit writes use chunked transfer; no Content-Length check can substitute.
+      response.write(request.url === '/wire' ? encoded : decoded)
+      response.end()
+    })
+    const host = await authority({ required: [{ name: 'http.host', resource: '127.0.0.1' }], optional: [] }, { http: ['127.0.0.1'] })
+    await host.invoke(async env => {
+      for (const path of ['/wire', '/decoded']) {
+        await expect(env.http['127.0.0.1']!.fetch(base + path).then(response => response.text())).rejects.toThrow(NodeAuthorityError)
+      }
     })
   })
 
