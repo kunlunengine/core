@@ -22,7 +22,8 @@
     "authority:node": "node scripts/collect-node-authority.mjs",
     "test": "lightning run",
     "test:watch": "lightning watch",
-    "test:packages": "pnpm build && node scripts/test-packed-test-utils.mjs"
+    "test:packages": "pnpm build && node scripts/test-packed-test-utils.mjs",
+    "test:cli:packages": "pnpm build && node scripts/test-packed-cli.mjs"
   },
   "devDependencies": {
     "@lightning-js/lightning": "3.1.0",

@@ -1,6 +1,7 @@
-import { access, mkdir, readdir, writeFile } from 'node:fs/promises'
+import { access, mkdir, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
+import { parseArgs } from 'node:util'
 import { nasti } from '@kunlun-js/builder-nasti'
 import { rspack } from '@kunlun-js/builder-rspack'
 import { vite } from '@kunlun-js/builder-vite'
@@ -13,14 +14,20 @@ import {
   type TargetDefinition,
 } from '@kunlun-js/core'
 import { nodeRuntime } from '@kunlun-js/runtime-node'
+import { materializeProject, planProjectCreation } from './generator.js'
+import { GeneratorError } from './generator-types.js'
 
 const VERSION = '0.2.0'
 const ENGINES = { nasti, vite, webpack, rspack } as const
-type EngineName = keyof typeof ENGINES
 
 export async function runCli(args: string[], cwd = process.cwd()): Promise<void> {
   const command = args[0] ?? 'help'
   const rest = args.slice(1)
+  if (command !== 'create' && command !== 'new') {
+    if (rest.some((arg) => /^(--dry-run|--json)(=|$)/.test(arg))) {
+      throw new Error('--dry-run and --json are currently supported only by kunlun create/new.')
+    }
+  }
 
   switch (command) {
     case 'build':
@@ -176,52 +183,68 @@ function enginesCommand(): void {
 }
 
 async function createCommand(args: string[], cwd: string): Promise<void> {
-  const destination = firstPositional(args, ['--builder'])
-  if (!destination) throw new Error('Usage: kunlun new <directory> [--builder nasti|vite|webpack|rspack]')
-  const engineName = (option(args, '--builder') ?? 'nasti') as EngineName
-  if (!(engineName in ENGINES)) throw new Error(`Unknown build engine: ${engineName}`)
-
-  const root = path.resolve(cwd, destination)
-  await mkdir(root, { recursive: true })
-  if ((await readdir(root)).length > 0) throw new Error(`Directory is not empty: ${root}`)
-
-  const packageName = path.basename(root).replace(/[^a-zA-Z0-9._-]/g, '-').toLowerCase()
-  const peer = enginePeer(engineName)
-  await mkdir(path.join(root, 'src'), { recursive: true })
-  await Promise.all([
-    writeFile(path.join(root, 'package.json'), `${JSON.stringify({
-      name: packageName,
-      version: '0.0.0',
-      private: true,
-      type: 'module',
-      packageManager: 'pnpm@11.22.0',
-      scripts: { dev: 'kunlun dev', build: 'kunlun build', start: 'kunlun start', doctor: 'kunlun doctor' },
-      dependencies: {
-        '@kunlun-js/core': '^0.2.0',
-        [`@kunlun-js/builder-${engineName}`]: '^0.1.0',
-      },
-      devDependencies: {
-        '@kunlun-js/cli': '^0.2.0',
-        [peer.name]: peer.version,
-      },
-    }, null, 2)}\n`),
-    writeFile(path.join(root, 'kunlun.config.mjs'), configTemplate(engineName)),
-    writeFile(path.join(root, 'index.html'), '<!doctype html>\n<meta charset="utf-8">\n<title>Kunlun Engine</title>\n<div id="app">Loading…</div>\n<script type="module" src="/src/main.js"></script>\n'),
-    writeFile(path.join(root, 'src/main.js'), `const app = document.querySelector('#app')
-try {
-  const response = await fetch('http://localhost:3001/api/hello')
-  const result = await response.json()
-  app.textContent = result.hello
-} catch (error) {
-  app.textContent = \`Runtime unavailable: \${error.message}\`
+  const { values, positionals } = parseCreationArgs(args)
+  if (values.help) {
+    if (values.json) {
+      throw new GeneratorError(
+        'KUNLUN_CREATE_ARGUMENT_INVALID',
+        '--help cannot be combined with --json.',
+        'Run kunlun create --help for human help, or provide a destination with --dry-run --json for a plan.',
+      )
+    }
+    printHelp()
+    return
+  }
+  const destination = positionals[0]
+  if (positionals.length !== 1 || !destination) {
+    throw new GeneratorError(
+      'KUNLUN_CREATE_ARGUMENT_INVALID',
+      'Creation requires exactly one destination directory.',
+      'Run kunlun create <directory> [--builder nasti|vite|webpack|rspack] [--dry-run] [--json].',
+    )
+  }
+  const plan = await planProjectCreation({
+    destination,
+    cwd,
+    ...(values.builder === undefined ? {} : { builder: values.builder }),
+  })
+  if (!values['dry-run']) await materializeProject(plan)
+  if (values.json) {
+    console.log(JSON.stringify(plan))
+    return
+  }
+  const action = values['dry-run'] ? 'Planned' : 'Created'
+  console.log(`✓ ${action} ${plan.project.name} with ${plan.project.builder} at ${plan.destination}`)
+  console.log(`  Template: ${plan.generator.template}@${plan.generator.version} (${plan.generator.protocol})`)
+  if (values['dry-run']) {
+    for (const file of plan.files) console.log(`  write ${file.path}`)
+    console.log('  Dry run: no files written or commands executed.')
+  }
+  // JSON carries raw argv/cwd; the human POSIX-shell hint must suppress expansion.
+  console.log(`  cd '${plan.destination.replace(/'/g, "'\\''")}'`)
+  for (const next of plan.nextCommands) console.log(`  ${next.command} ${next.args.join(' ')}`)
 }
-`),
-    writeFile(path.join(root, '.gitignore'), 'node_modules/\ndist/\n.kunlun/\n'),
-  ])
-  console.log(`✓ Created ${packageName} with ${engineName} at ${root}`)
-  console.log(`  cd ${destination}`)
-  console.log('  pnpm install')
-  console.log('  pnpm dev')
+
+function parseCreationArgs(args: string[]) {
+  try {
+    return parseArgs({
+      args,
+      strict: true,
+      allowPositionals: true,
+      options: {
+        builder: { type: 'string' },
+        'dry-run': { type: 'boolean' },
+        json: { type: 'boolean' },
+        help: { type: 'boolean', short: 'h' },
+      },
+    })
+  } catch (error) {
+    throw new GeneratorError(
+      'KUNLUN_CREATE_ARGUMENT_INVALID',
+      error instanceof Error ? error.message : String(error),
+      'Run kunlun create --help. Boolean flags --dry-run and --json take no value.',
+    )
+  }
 }
 
 async function loadConfig(root: string, explicit?: string): Promise<KunlunConfig> {
@@ -286,65 +309,14 @@ function option(args: string[], name: string): string | undefined {
   return index >= 0 ? args[index + 1] : undefined
 }
 
-function firstPositional(args: string[], valueOptions: string[]): string | undefined {
-  for (let index = 0; index < args.length; index++) {
-    const value = args[index]
-    if (!value) continue
-    if (valueOptions.includes(value)) {
-      index++
-      continue
-    }
-    if (value.startsWith('--')) continue
-    return value
-  }
-  return undefined
-}
-
-function enginePeer(name: EngineName): { name: string; version: string } {
-  switch (name) {
-    case 'nasti': return { name: '@nasti-toolchain/nasti', version: '^2.4.4' }
-    case 'vite': return { name: 'vite', version: '^8.2.2' }
-    case 'webpack': return { name: 'webpack', version: '^5.109.2' }
-    case 'rspack': return { name: '@rspack/core', version: '^2.1.10' }
-  }
-}
-
-function configTemplate(name: EngineName): string {
-  return `import { ${name} } from '@kunlun-js/builder-${name}'
-import { defineApplication, defineConfig, defineService, route } from '@kunlun-js/core'
-
-const application = defineApplication({
-  name: 'hello-kunlun',
-  services: [
-    defineService({
-      name: 'hello',
-      routes: [route('GET', '/api/hello', () => Response.json({ hello: 'Kunlun' }))],
-    }),
-  ],
-})
-
-export default defineConfig({
-  application,
-  builder: ${name}(),
-  targets: [
-    {
-      name: 'client',
-      consumer: 'client',
-      entries: { main: './src/main.js' },
-      outDir: 'dist/client',
-    },
-  ],
-})
-`
-}
-
 function printHelp(): void {
   console.log(`Kunlun Engine ${VERSION}
 
 Usage: kunlun <command> [options]
 
 Commands:
-  new <directory>      Create a project (Nasti by default)
+  create <directory>   Plan or create a project (Nasti by default)
+  new <directory>      Compatibility alias for create
   dev                  Start build targets and the application runtime
   build                Build configured targets
   start                Start only the application runtime
@@ -353,6 +325,8 @@ Commands:
 
 Options:
   --builder <name>     nasti, vite, webpack, or rspack
+  --dry-run            Preview creation without writes or command execution
+  --json               Creation plan or diagnostic as one JSON object
   --config <file>      Config path relative to the project root
   --root <directory>   Project root
   --target <name>      Run one configured target
