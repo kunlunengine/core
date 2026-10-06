@@ -27,8 +27,8 @@ Official references:
 
 The first index should contain user-facing documentation and package READMEs. It intentionally
 excludes source, tests, generated output, launch copy, contributor recruitment, roadmaps, and
-delivery plans. This prevents proposed v0.2-v0.4 behavior from being returned as an implemented
-API and prevents tests or internal imports from outranking supported package-root examples.
+delivery plans. This prevents proposed behavior from being returned as an implemented API and
+prevents tests or internal imports from outranking supported package-root examples.
 
 The Git repository source does not require `llms.txt`. Add an `llms.txt` source only when Kunlun has
 a canonical documentation website and can keep that website index current.

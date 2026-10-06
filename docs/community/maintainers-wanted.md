@@ -17,9 +17,10 @@ Kunlun already has:
 - real-build contract tests across all four build engines.
 
 The next three development lines are described in the
-[v0.2-v0.4 roadmap](https://github.com/kunlunengine/core/blob/main/ROADMAP.md): a runnable
+[repository roadmap](https://github.com/kunlunengine/core/blob/main/ROADMAP.md): a runnable
 full-stack application layer, a coherent daily workflow, and portable server artifacts that can
-cross the Node.js/native-runtime boundary.
+cross the Node.js/native-runtime boundary. The same roadmap also proposes v0.5 integrated
+toolchain/workspace work and v1.0 compatibility/support gates; these are not current features.
 
 ## Where we need ownership
 

@@ -1,10 +1,16 @@
 # Kunlun Engine Core Roadmap
 
-Status date: 2026-09-13
+Status date: 2026-10-06
 
 This roadmap covers the `kunlunengine/core` repository. Version numbers describe repository-wide
 development lines and capability gates, not calendar promises; individual `@kunlun-js` packages
 may version independently while the public contracts are still pre-1.0.
+
+The CLI planning sequence is **v0.1 → v0.2 → v0.3 → v0.4 → v0.5 → v1.0**. The v0.5 and v1.0
+sections are proposed scope added to complete the runtime discussion “更新 CLI 版本目标与规划”;
+they are not previously approved runtime release gates or claims of implemented functionality.
+The [detailed CLI plan](./docs/plans/cli-v0.5-v1.0.md) records the workflow baseline, delivery
+slices, ownership, and release evidence. CLI/Core versions and runtime M0–M6 remain separate tracks.
 
 ## Starting point
 
@@ -12,7 +18,7 @@ The v0.1 release established explicit application, route, service, and capabilit
 bundler-neutral `BuildEngine` contract; first-party Nasti, Vite, Webpack, and Rspack adapters; a
 Fetch-based runtime contract and Node.js reference runtime; and a thin `kunlun` CLI.
 
-Three rules continue through v0.4:
+Three rules continue through v1.0:
 
 1. Conventions compile into inspectable core contracts instead of creating a second application
    model.
@@ -118,16 +124,83 @@ One integrity-addressed server artifact passes the shared application conformanc
 and a compatible native runtime. `kunlun doctor` explains compatibility before launch, tampered
 artifacts are rejected, and switching runtimes requires no application-source changes.
 
-## Deliberately unassigned beyond v0.4
+## v0.5 — Integrated toolchain and workspace workflow (proposed)
+
+**Goal:** extend the v0.3 daily workflow and v0.4 portable artifacts into a coherent application,
+library, and workspace toolchain, using the released Vite+ 1.0 workflow as the comparison baseline.
+
+### Planned outcomes
+
+- Add inspectable, explicitly supported migrations with file-level diagnostics and no silent
+  replacement of native builder configuration.
+- Add a library template and `kunlun pack` with consumer-tested exports, declarations, formats,
+  and source maps; keep application `build` and library packaging distinct.
+- Extend `check` with explicit format, lint, and type-check providers, and exercise the
+  project-selected Lightning Node workflow without implying a JSC test pool.
+- Add `kunlun run` with workspace discovery, task dependencies, filters, bounded parallelism,
+  cancellation, and opt-in local result caching with explainable invalidation.
+- Add project-pinned toolchain selection and verified acquisition, version reporting, rollback,
+  and offline diagnostics; retain pnpm as the dependency resolver and script runner.
+- Integrate capability-aware runtime inspection where supported; native Inspector support depends
+  on runtime M4 and remains separate from v0.4 application conformance.
+- Test the same packed application, library, and workspace workflows locally and in CI, including
+  machine-readable output, cleanup, failure paths, and reproducible performance measurements.
+
+### Exit gate
+
+A declared migration fixture and generated application, library, and workspace pass their complete
+documented workflows from packed packages. Library consumers validate emitted exports and types;
+reference tasks with a complete declared input model have identical results on a cache miss and hit,
+and every declared input change invalidates the cache. Arbitrary scripts are uncached by default;
+opt-in caching relies on the task author's complete input declaration, not a sandbox guarantee.
+Toolchain selection is reproducible and rejects tampered, untrusted, or incompatible downloads.
+Unsupported providers are diagnosed rather than reported as passing.
+
+The [v0.5 slices](./docs/plans/cli-v0.5-v1.0.md#v05-delivery-slices) define the order and evidence.
+This does not expand v0.3/v0.4 retrospectively or require a native package manager, Rust Nasti,
+Lightning JSC executor, shared remote cache, or hosted workspace service.
+
+## v1.0 — Stable contracts and supported releases (proposed)
+
+**Goal:** turn the proven v0.2–v0.5 workflow into a bounded, documented compatibility and support
+commitment, not a declaration that every long-term native or cloud feature is finished.
+
+### Planned outcomes
+
+- Publish the supported command, configuration, generator, adapter, manifest/ABI, diagnostic,
+  event-schema, and extension-hook compatibility matrix.
+- Define semver, deprecation and migration rules, supported platforms/toolchains, maintenance and
+  security-support windows, and ownership before declaring a stable release.
+- Run clean-room install, upgrade, migration, application, library, workspace, and failure-path
+  conformance from release artifacts on every advertised platform.
+- Publish integrity, provenance, dependency/SBOM, reproducibility, and performance evidence for
+  the release artifacts and validate verified toolchain installation and recovery.
+- Keep API references, runnable examples, and Context7 retrieval aligned with released versions.
+  Nasti and Lightning are already indexed; indexing alone is not execution or native qualification.
+
+### Exit gate
+
+Every advertised stable capability has packed/released-artifact fixtures, an owner, compatibility
+documentation, and a support policy. Upgrade and deprecation fixtures pass, release evidence is
+published, and the same CLI plans and diagnostic codes work locally and in CI.
+
+Runtime M6 is required for a **stable native-runtime distribution claim**, not proof that CLI
+v1.0 is complete. A Node-backed CLI release can qualify without M6 after the preceding Core gates,
+including v0.4's Node/JSC application conformance; it does not bypass runtime M3. Native features
+whose own gates remain incomplete must be labeled preview or unsupported in its support matrix.
+The [v1.0 release gate](./docs/plans/cli-v0.5-v1.0.md#v10-release-gate) defines the evidence.
+
+## Deliberately unassigned beyond this plan
 
 The following work needs separate threat models or product validation before it receives a Core
 release number:
 
+- replacing pnpm with native `kunlun-pm`, porting Nasti, or qualifying a Lightning JSC executor;
 - hostile multi-tenant extension execution and operating-system isolation;
 - a hosted remote-workspace control plane, billing, or provider-specific infrastructure;
 - a broad Next.js compatibility layer;
-- distributed task execution and shared remote caches; and
-- a 1.0 compatibility and long-term-support policy.
+- remote templates and a template marketplace; and
+- distributed task execution and shared remote caches.
 
 ## Workstreams looking for owners
 
