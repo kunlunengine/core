@@ -153,10 +153,19 @@ available inside that constructor.
 
 ## Roadmap
 
-The repository-wide [v0.2-v0.4 roadmap](./ROADMAP.md) defines capability-based exit gates rather
-than calendar promises. In short: v0.2 makes the full-stack application path runnable, v0.3 makes
-the daily development workflow coherent, and v0.4 makes server artifacts portable across runtime
-adapters.
+The repository-wide [v0.1–v1.0 roadmap](./ROADMAP.md) defines capability-based exit gates rather
+than calendar promises. v0.2 makes the full-stack application path runnable, v0.3 makes the daily
+development workflow coherent, and v0.4 makes server artifacts portable across runtime adapters.
+The proposed v0.5 scope adds migration, library packaging, integrated checks, workspace tasks and
+local caching, verified toolchain management, and CI. The proposed v1.0 scope defines tested
+compatibility, release evidence, and maintenance/security-support commitments.
+
+The [CLI v0.5–v1.0 delivery plan](./docs/plans/cli-v0.5-v1.0.md) uses the released Vite+ 1.0
+workflow as its comparison baseline while keeping Nasti, Lightning, and bundler-neutral contracts.
+Nasti and Lightning are already indexed by Context7; ongoing work is current, runnable examples,
+not initial registration. These are future gates, not features in the v0.2 source preview.
+CLI/Core versions and runtime M0–M6 are separate tracks; native provider rewrites and shared remote
+caches are not hidden prerequisites for the Node-backed workflow.
 
 We are also [looking for maintainers](./docs/community/maintainers-wanted.md) to own focused parts
 of the application, build-engine, runtime-contract, CLI, quality, and community workstreams.

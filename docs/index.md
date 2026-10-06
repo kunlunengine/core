@@ -44,6 +44,8 @@ description of its direction, not an API, plugin, rendering, or deployment compa
 
 For maintainers, the repository also contains the [release process](./releasing.md), the
 [repository roadmap](../ROADMAP.md), and the detailed [v0.3 delivery slices](./plans/v0.3-slices.md).
+The proposed [CLI v0.5–v1.0 delivery plan](./plans/cli-v0.5-v1.0.md) completes the six-version
+sequence with integrated toolchain/workspace work and stable compatibility/support gates.
 Roadmap and planning documents describe future gates and are not API reference.
 
 ## Evaluate the source preview

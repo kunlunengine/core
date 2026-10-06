@@ -70,5 +70,17 @@ The v0.2 source preview still writes a fixed client-and-Fetch-service scaffold. 
 install` as the next step but does not run it. Previewable versioned generator plans, collision-safe
 plan execution, `--dry-run`, and `--json` are v0.3 work and must not be assumed from this README.
 
+## Planned delivery
+
+The [repository roadmap](../../ROADMAP.md) tracks v0.1 through v1.0 independently of native
+runtime M0–M6. The [v0.3 slices](../../docs/plans/v0.3-slices.md) add the versioned generator,
+pinned pnpm lifecycle orchestration, and dry-run/JSON contracts. v0.4 adds portable artifacts and
+runtime negotiation. The proposed [v0.5–v1.0 plan](../../docs/plans/cli-v0.5-v1.0.md) then adds
+migration, library packaging, expanded checks, workspace tasks/local cache, verified toolchain
+management, and stable compatibility/support gates.
+
+Those documents are future scope, not additional current commands. `migrate`, `pack`, `run`,
+`toolchain`, and `inspect` must not be inferred to exist from the planning command names.
+
 This package is part of [Kunlun Engine](https://github.com/kunlunengine/core), a project of Zixiao
 Laboratories.
