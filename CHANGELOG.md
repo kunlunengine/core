@@ -17,6 +17,9 @@
   to 22.12 while keeping existing public runtime packages at 20.19.
 - Added `@kunlun-js/test-utils` for in-memory Core application tests, real HTTP tests, explicit
   capability doubles, and suite-scoped Lightning setup and teardown.
+- Started the v0.3 CLI creation foundation: versioned first-party scaffold plans, no-write
+  `create/new --dry-run --json`, stable creation diagnostics, and collision-safe execution of the
+  same plan. This does not complete the full-stack v0.2 entry gate.
 
 ## 0.1.0 - 2026-08-20
 

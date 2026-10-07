@@ -37,7 +37,9 @@ manifest.
 - Production builds with Nasti, Vite, Webpack, and Rspack.
 - Development sessions and middleware for all four engines.
 - Native module transforms, HMR, and SSR loading where the selected engine exposes them.
-- `kunlun new`, `dev`, `build`, `start`, `doctor`, and `engines` commands.
+- `kunlun create` (`new` alias), `dev`, `build`, `start`, `doctor`, and `engines` commands.
+- Versioned creation plans with `create --dry-run --json` for the current client-and-Fetch-service
+  scaffold; the complete full-stack template remains gated on v0.2.
 - Deterministic `app/` page, nested-layout, dynamic-segment, and Fetch route-handler discovery in
   the first `@kunlun-js/next` v0.2 contract.
 - Contract tests that execute real builds with all four engines.
@@ -80,15 +82,20 @@ public exports and timeout cleanup in a separate consumer project without source
 Create a project with Nasti, the default engine:
 
 ```bash
-node packages/cli/dist/cli.js new ../hello-kunlun
+node packages/cli/dist/cli.js create ../hello-kunlun --dry-run --json
+node packages/cli/dist/cli.js create ../hello-kunlun
 ```
+
+The preview validates the destination without writing files or running pnpm. See the
+[creation contract](./packages/cli/README.md#creation-foundation-contract-in-progress) for plan
+fields, diagnostics, and execution boundaries. `new` remains a compatibility alias.
 
 Or select another engine:
 
 ```bash
-node packages/cli/dist/cli.js new ../hello-kunlun --builder vite
-node packages/cli/dist/cli.js new ../hello-kunlun --builder webpack
-node packages/cli/dist/cli.js new ../hello-kunlun --builder rspack
+node packages/cli/dist/cli.js create ../hello-kunlun --builder vite
+node packages/cli/dist/cli.js create ../hello-kunlun --builder webpack
+node packages/cli/dist/cli.js create ../hello-kunlun --builder rspack
 ```
 
 ## Application and build configuration
